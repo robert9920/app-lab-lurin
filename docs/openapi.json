@@ -1,0 +1,2824 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Laboratorio Lara Consulting",
+    "version": "3.0.0",
+    "description": "Sesión opaca en cookie lab_session. Escrituras requieren Origin exacto y X-CSRF-Token de GET /session. ADMIN administra; MANAGER dirige; TECH solo consulta sus solicitudes, muestras y ensayos asignados; CLIENT accede por proyecto. Borradores exclusivos de su autor. En Azure, la clave de Functions se agrega exclusivamente en el proxy. version identifica la revisión de la solicitud. Los lotes de /work son transaccionales. Cada informe se hace visible al confirmar la carga."
+  },
+  "servers": [
+    {
+      "url": "/api"
+    }
+  ],
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "operationId": "login_post",
+        "summary": "login",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Login"
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/session": {
+      "get": {
+        "operationId": "current_session_get",
+        "summary": "current session",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": []
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "logout_post",
+        "summary": "logout",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/management/data": {
+      "get": {
+        "operationId": "admin_data_get",
+        "summary": "admin data",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": []
+      }
+    },
+    "/management/organizations": {
+      "post": {
+        "operationId": "admin_organizations_post",
+        "summary": "admin organizations",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Organization"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/management/projects": {
+      "post": {
+        "operationId": "admin_projects_post",
+        "summary": "admin projects",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Project"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/management/users": {
+      "post": {
+        "operationId": "admin_users_post",
+        "summary": "admin users",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/management/users/{id}": {
+      "put": {
+        "operationId": "edit_user_put",
+        "summary": "edit user",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserEdit"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/management/users/{id}/password": {
+      "post": {
+        "operationId": "reset_password_post",
+        "summary": "reset password",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Password"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/management/catalog": {
+      "post": {
+        "operationId": "admin_catalog_post",
+        "summary": "admin catalog",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Catalog"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects": {
+      "get": {
+        "operationId": "projects_get",
+        "summary": "projects",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": []
+      }
+    },
+    "/catalog": {
+      "get": {
+        "operationId": "catalog_get",
+        "summary": "catalog",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": []
+      }
+    },
+    "/technicians": {
+      "get": {
+        "operationId": "technicians_get",
+        "summary": "technicians",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": []
+      }
+    },
+    "/requests": {
+      "get": {
+        "operationId": "requests_get",
+        "summary": "requests",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "view",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "condition",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "",
+                "NOT_RECEIVED",
+                "issues"
+              ]
+            },
+            "description": "En view=reception, NOT_RECEIVED exige al menos una muestra sin recibir; issues exige material observado, dañado o insuficiente."
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 30
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "requests_post",
+        "summary": "requests",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/requests/{rid}": {
+      "get": {
+        "operationId": "request_detail_get",
+        "summary": "request detail",
+        "responses": {
+          "200": {
+            "description": "Operación completada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tasks": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/WorkTask"
+                      }
+                    },
+                    "samples": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ReceivedSampleView"
+                      }
+                    },
+                    "activity": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/HistoryEntry"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      },
+      "put": {
+        "operationId": "request_detail_put",
+        "summary": "request detail",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestEdit"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/requests/{rid}/actions": {
+      "post": {
+        "operationId": "actions_post",
+        "summary": "actions",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Action"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/requests/{rid}/receptions": {
+      "post": {
+        "operationId": "receptions_post",
+        "summary": "receptions",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Reception"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/requests/{rid}/tasks": {
+      "post": {
+        "operationId": "tasks_post",
+        "summary": "tasks",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskUpdate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/requests/{rid}/comments": {
+      "post": {
+        "operationId": "comments_post",
+        "summary": "comments",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Comment"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/work": {
+      "get": {
+        "operationId": "work_get",
+        "summary": "work",
+        "responses": {
+          "200": {
+            "description": "Operación completada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/WorkTask"
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "page": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "project",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "request_q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "request",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "technician",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "assay",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "metric",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 30
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "work_post",
+        "summary": "work",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkUpdate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dashboard": {
+      "get": {
+        "operationId": "dashboard_get",
+        "summary": "dashboard",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": []
+      }
+    },
+    "/requests/{rid}/reports": {
+      "post": {
+        "operationId": "upload_post",
+        "summary": "upload",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Request-Version",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/pdf": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "description": "PDF estructuralmente válido, sin cifrado ni contenido activo; máximo 20 MiB y 500 páginas."
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reports": {
+      "get": {
+        "operationId": "reports_get",
+        "summary": "reports",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "request",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 30
+            }
+          }
+        ]
+      }
+    },
+    "/reports/{did}/download": {
+      "get": {
+        "operationId": "download_get",
+        "summary": "download",
+        "responses": {
+          "200": {
+            "description": "Operación completada",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "did",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/requests/{rid}/print/{kind}": {
+      "get": {
+        "operationId": "print_document_get",
+        "summary": "print document",
+        "responses": {
+          "200": {
+            "description": "Operación completada",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          }
+        },
+        "parameters": [
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "receipt",
+                "labels"
+              ]
+            }
+          },
+          {
+            "name": "sample_ids",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Obligatorio para labels: 1 a 200 UUID separados por comas, sin duplicados, recibidos y autorizados. PDF A4 2x4, etiquetas 95x68 mm."
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "lab_session"
+      }
+    },
+    "schemas": {
+      "WorkTask": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "enum": [
+              "PENDING",
+              "RUNNING",
+              "OBSERVED",
+              "COMPLETED",
+              "CANCELLED"
+            ]
+          },
+          "technician_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "assigned": {
+            "type": "boolean",
+            "description": "Derivado de tecnico_id; no es un estado ni columna duplicada."
+          },
+          "allowed_actions": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "assign",
+                "start",
+                "observe",
+                "complete",
+                "resume",
+                "cancel"
+              ]
+            },
+            "description": "Acciones autorizadas por rol, asignación, material y estado. La API valida de nuevo al ejecutar."
+          }
+        }
+      },
+      "HistoryEntry": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "actor_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "internal": {
+            "type": "boolean"
+          },
+          "description_lines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Descripción legible; nunca JSON de auditoría crudo."
+          }
+        }
+      },
+      "ReceivedSampleView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "codigo_recepcion": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 60
+          },
+          "codigo_laboratorio": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 60
+          },
+          "can_receive": {
+            "type": "boolean",
+            "description": "Permiso operativo sobre la muestra; recibir requiere además solicitud aprobada."
+          }
+        }
+      },
+      "Login": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "Login",
+        "type": "object"
+      },
+      "Organization": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 200,
+            "minLength": 2,
+            "title": "Name",
+            "type": "string"
+          },
+          "tax_id": {
+            "default": "",
+            "maxLength": 30,
+            "title": "Tax Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "Organization",
+        "type": "object"
+      },
+      "Project": {
+        "additionalProperties": false,
+        "properties": {
+          "organization_id": {
+            "format": "uuid",
+            "title": "Organization Id",
+            "type": "string"
+          },
+          "code": {
+            "maxLength": 100,
+            "minLength": 2,
+            "title": "Code",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 250,
+            "minLength": 3,
+            "title": "Name",
+            "type": "string"
+          },
+          "location": {
+            "default": "",
+            "maxLength": 250,
+            "title": "Location",
+            "type": "string"
+          }
+        },
+        "required": [
+          "organization_id",
+          "code",
+          "name"
+        ],
+        "title": "Project",
+        "type": "object"
+      },
+      "UserCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "maxLength": 128,
+            "minLength": 15,
+            "title": "Password",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "organization_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Organization Id"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 2,
+            "title": "Name",
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "enum": [
+                "ADMIN",
+                "MANAGER",
+                "TECH",
+                "CLIENT"
+              ],
+              "type": "string"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Roles",
+            "type": "array"
+          },
+          "project_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Project Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "password",
+          "email",
+          "name",
+          "roles"
+        ],
+        "title": "UserCreate",
+        "type": "object"
+      },
+      "UserEdit": {
+        "additionalProperties": false,
+        "properties": {
+          "organization_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Organization Id"
+          },
+          "roles": {
+            "items": {
+              "enum": [
+                "ADMIN",
+                "MANAGER",
+                "TECH",
+                "CLIENT"
+              ],
+              "type": "string"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Roles",
+            "type": "array"
+          },
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "project_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Project Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "roles",
+          "active"
+        ],
+        "title": "UserEdit",
+        "type": "object"
+      },
+      "Password": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "maxLength": 128,
+            "minLength": 15,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "title": "Password",
+        "type": "object"
+      },
+      "Catalog": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 3,
+            "title": "Name",
+            "type": "string"
+          },
+          "method": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Method",
+            "type": "string"
+          },
+          "category": {
+            "default": "Geotecnia",
+            "maxLength": 100,
+            "title": "Category",
+            "type": "string"
+          },
+          "active": {
+            "default": true,
+            "title": "Active",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "Catalog",
+        "type": "object"
+      },
+      "Sample": {
+        "additionalProperties": false,
+        "properties": {
+          "client_code": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Client Code",
+            "type": "string"
+          },
+          "borehole": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Borehole",
+            "type": "string"
+          },
+          "material": {
+            "default": "Suelo",
+            "maxLength": 100,
+            "title": "Material",
+            "type": "string"
+          },
+          "depth_from": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Depth From"
+          },
+          "depth_to": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Depth To"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Quantity"
+          },
+          "unit": {
+            "default": "kg",
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Unit",
+            "type": "string"
+          },
+          "notes": {
+            "default": "",
+            "maxLength": 3000,
+            "title": "Notes",
+            "type": "string"
+          },
+          "assay_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 40,
+            "minItems": 1,
+            "title": "Assay Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "client_code",
+          "assay_ids"
+        ],
+        "title": "Sample",
+        "type": "object"
+      },
+      "RequestCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 180,
+            "minLength": 3,
+            "title": "Title",
+            "type": "string"
+          },
+          "notes": {
+            "default": "",
+            "maxLength": 5000,
+            "title": "Notes",
+            "type": "string"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Target Date"
+          },
+          "samples": {
+            "items": {
+              "$ref": "#/components/schemas/Sample"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Samples",
+            "type": "array"
+          }
+        },
+        "required": [
+          "project_id",
+          "title",
+          "samples"
+        ],
+        "title": "RequestCreate",
+        "type": "object"
+      },
+      "RequestEdit": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "exclusiveMinimum": 0,
+            "title": "Version",
+            "type": "integer"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 180,
+            "minLength": 3,
+            "title": "Title",
+            "type": "string"
+          },
+          "notes": {
+            "default": "",
+            "maxLength": 5000,
+            "title": "Notes",
+            "type": "string"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Target Date"
+          },
+          "samples": {
+            "items": {
+              "$ref": "#/components/schemas/Sample"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Samples",
+            "type": "array"
+          }
+        },
+        "required": [
+          "version",
+          "project_id",
+          "title",
+          "samples"
+        ],
+        "title": "RequestEdit",
+        "type": "object"
+      },
+      "Action": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "exclusiveMinimum": 0,
+            "title": "Version",
+            "type": "integer"
+          },
+          "action": {
+            "enum": [
+              "submit",
+              "approve",
+              "observe",
+              "reject",
+              "close"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "maxLength": 3000,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "action"
+        ],
+        "title": "Action",
+        "type": "object"
+      },
+      "ReceivedSample": {
+        "additionalProperties": false,
+        "properties": {
+          "sample_id": {
+            "format": "uuid",
+            "title": "Sample Id",
+            "type": "string"
+          },
+          "codigo_recepcion": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Codigo Recepcion",
+            "type": "string"
+          },
+          "codigo_laboratorio": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Codigo Laboratorio",
+            "type": "string"
+          },
+          "condition": {
+            "default": "OK",
+            "enum": [
+              "OK",
+              "OBSERVED",
+              "DAMAGED",
+              "INSUFFICIENT"
+            ],
+            "title": "Condition",
+            "type": "string"
+          },
+          "received_quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Received Quantity"
+          },
+          "reception_notes": {
+            "default": "",
+            "maxLength": 3000,
+            "title": "Reception Notes",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sample_id",
+          "codigo_recepcion",
+          "codigo_laboratorio"
+        ],
+        "title": "ReceivedSample",
+        "type": "object"
+      },
+      "Reception": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "exclusiveMinimum": 0,
+            "title": "Version",
+            "type": "integer"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "transport": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Transport",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "maxLength": 3000,
+            "title": "Reason",
+            "type": "string"
+          },
+          "samples": {
+            "items": {
+              "$ref": "#/components/schemas/ReceivedSample"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Samples",
+            "type": "array"
+          }
+        },
+        "required": [
+          "version",
+          "received_at",
+          "samples"
+        ],
+        "title": "Reception",
+        "type": "object"
+      },
+      "TaskUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "exclusiveMinimum": 0,
+            "title": "Version",
+            "type": "integer"
+          },
+          "task_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Task Ids",
+            "type": "array"
+          },
+          "action": {
+            "enum": [
+              "assign",
+              "start",
+              "observe",
+              "complete",
+              "cancel",
+              "resume"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "technician_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Technician Id"
+          },
+          "planned_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Planned Start"
+          },
+          "planned_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Planned End"
+          },
+          "reason": {
+            "default": "",
+            "maxLength": 3000,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "task_ids",
+          "action"
+        ],
+        "title": "TaskUpdate",
+        "type": "object"
+      },
+      "Comment": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "exclusiveMinimum": 0,
+            "title": "Version",
+            "type": "integer"
+          },
+          "body": {
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "internal": {
+            "default": false,
+            "title": "Internal",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "version",
+          "body"
+        ],
+        "title": "Comment",
+        "type": "object"
+      },
+      "TaskSelection": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "exclusiveMinimum": 0,
+            "title": "Version",
+            "type": "integer"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "task_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Task Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "version",
+          "request_id",
+          "task_ids"
+        ],
+        "title": "TaskSelection",
+        "type": "object"
+      },
+      "WorkUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "requests": {
+            "items": {
+              "$ref": "#/components/schemas/TaskSelection"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Requests",
+            "type": "array"
+          },
+          "action": {
+            "enum": [
+              "assign",
+              "start",
+              "observe",
+              "complete",
+              "cancel",
+              "resume"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "technician_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Technician Id"
+          },
+          "planned_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Planned Start"
+          },
+          "planned_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Planned End"
+          },
+          "reason": {
+            "default": "",
+            "maxLength": 3000,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requests",
+          "action"
+        ],
+        "title": "WorkUpdate",
+        "type": "object"
+      }
+    }
+  },
+  "security": [
+    {
+      "session": []
+    }
+  ]
+}

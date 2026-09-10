@@ -1,0 +1,738 @@
+[
+  {
+    "table_name": "actividad",
+    "column_name": "id",
+    "data_type": "bigint",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "YES"
+  },
+  {
+    "table_name": "actividad",
+    "column_name": "solicitud_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "actividad",
+    "column_name": "autor_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "actividad",
+    "column_name": "tipo",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": "'EVENT'::text",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "actividad",
+    "column_name": "mensaje",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "actividad",
+    "column_name": "detalle",
+    "data_type": "jsonb",
+    "is_nullable": "NO",
+    "column_default": "'{}'::jsonb",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "actividad",
+    "column_name": "interno",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "column_default": "true",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "actividad",
+    "column_name": "creado_en",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "column_default": "now()",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "catalogo_ensayos",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": "gen_random_uuid()",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "catalogo_ensayos",
+    "column_name": "codigo",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "catalogo_ensayos",
+    "column_name": "nombre",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "catalogo_ensayos",
+    "column_name": "metodo",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": "''::text",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "catalogo_ensayos",
+    "column_name": "categoria",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": "'Geotecnia'::text",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "catalogo_ensayos",
+    "column_name": "activo",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "column_default": "true",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "empresas",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": "gen_random_uuid()",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "empresas",
+    "column_name": "nombre",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "empresas",
+    "column_name": "identificacion_tributaria",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "empresas",
+    "column_name": "activo",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "column_default": "true",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "ensayos_muestra",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": "gen_random_uuid()",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "ensayos_muestra",
+    "column_name": "muestra_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "ensayos_muestra",
+    "column_name": "ensayo_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "ensayos_muestra",
+    "column_name": "tecnico_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "ensayos_muestra",
+    "column_name": "estado_ensayo",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": "'PENDING'::text",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "ensayos_muestra",
+    "column_name": "inicio_previsto",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "ensayos_muestra",
+    "column_name": "fin_previsto",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "ensayos_muestra",
+    "column_name": "iniciado_en",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "ensayos_muestra",
+    "column_name": "completado_en",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "ensayos_muestra",
+    "column_name": "observaciones",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": "''::text",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "informes",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": "gen_random_uuid()",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "informes",
+    "column_name": "solicitud_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "informes",
+    "column_name": "version",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "informes",
+    "column_name": "nombre",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "informes",
+    "column_name": "clave_archivo",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "informes",
+    "column_name": "sha256",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "informes",
+    "column_name": "tamano_bytes",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "informes",
+    "column_name": "subido_por",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "informes",
+    "column_name": "creado_en",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "column_default": "now()",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "limites_intentos",
+    "column_name": "clave_limite",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "limites_intentos",
+    "column_name": "numero_intentos",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "column_default": "1",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "limites_intentos",
+    "column_name": "inicio_ventana",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "column_default": "now()",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "miembros_proyecto",
+    "column_name": "proyecto_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "miembros_proyecto",
+    "column_name": "usuario_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "migraciones_esquema",
+    "column_name": "version",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "migraciones_esquema",
+    "column_name": "aplicado_en",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "column_default": "now()",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "muestras",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": "gen_random_uuid()",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "muestras",
+    "column_name": "solicitud_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "muestras",
+    "column_name": "codigo_cliente",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "muestras",
+    "column_name": "calicata_sondaje",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": "''::text",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "muestras",
+    "column_name": "material",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": "'Suelo'::text",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "muestras",
+    "column_name": "profundidad_inicial",
+    "data_type": "numeric",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "muestras",
+    "column_name": "profundidad_final",
+    "data_type": "numeric",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "muestras",
+    "column_name": "cantidad",
+    "data_type": "numeric",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "muestras",
+    "column_name": "unidad",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": "'kg'::text",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "muestras",
+    "column_name": "observaciones",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": "''::text",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "muestras",
+    "column_name": "recibido_en",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "muestras",
+    "column_name": "recibido_por",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "muestras",
+    "column_name": "transporte",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": "''::text",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "muestras",
+    "column_name": "cantidad_recibida",
+    "data_type": "numeric",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "muestras",
+    "column_name": "condicion",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": "'NOT_RECEIVED'::text",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "muestras",
+    "column_name": "observaciones_recepcion",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": "''::text",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "muestras",
+    "column_name": "codigo_recepcion",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "muestras",
+    "column_name": "codigo_laboratorio",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "proyectos",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": "gen_random_uuid()",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "proyectos",
+    "column_name": "empresa_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "proyectos",
+    "column_name": "codigo",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "proyectos",
+    "column_name": "nombre",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "proyectos",
+    "column_name": "ubicacion",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": "''::text",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "proyectos",
+    "column_name": "activo",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "column_default": "true",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "sesiones",
+    "column_name": "hash_token",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "sesiones",
+    "column_name": "usuario_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "sesiones",
+    "column_name": "creado_en",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "column_default": "now()",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "sesiones",
+    "column_name": "ultimo_acceso",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "column_default": "now()",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "sesiones",
+    "column_name": "vence_en",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "solicitudes",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": "gen_random_uuid()",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "solicitudes",
+    "column_name": "codigo",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": "('SOL-'::text || lpad((nextval('numero_solicitud'::regclass))::text, 8, '0'::text))",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "solicitudes",
+    "column_name": "proyecto_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "solicitudes",
+    "column_name": "creado_por",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "solicitudes",
+    "column_name": "titulo",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "solicitudes",
+    "column_name": "estado_solicitud",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": "'DRAFT'::text",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "solicitudes",
+    "column_name": "observaciones",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": "''::text",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "solicitudes",
+    "column_name": "fecha_objetivo",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "solicitudes",
+    "column_name": "version",
+    "data_type": "integer",
+    "is_nullable": "NO",
+    "column_default": "1",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "solicitudes",
+    "column_name": "creado_en",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "column_default": "now()",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "solicitudes",
+    "column_name": "actualizado_en",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "column_default": "now()",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "usuarios",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": "gen_random_uuid()",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "usuarios",
+    "column_name": "empresa_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "usuarios",
+    "column_name": "nombre",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "usuarios",
+    "column_name": "correo",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "usuarios",
+    "column_name": "hash_contrasena",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "usuarios",
+    "column_name": "roles",
+    "data_type": "ARRAY",
+    "is_nullable": "NO",
+    "column_default": "'{CLIENT}'::text[]",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "usuarios",
+    "column_name": "activo",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "column_default": "true",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "usuarios",
+    "column_name": "creado_en",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "column_default": "now()",
+    "is_identity": "NO"
+  }
+]

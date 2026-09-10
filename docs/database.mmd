@@ -1,0 +1,140 @@
+---
+title: Laboratorio Lara Consulting · PostgreSQL v3
+config:
+  theme: neutral
+---
+erDiagram
+    empresas {
+        uuid id PK
+        text nombre
+        text identificacion_tributaria
+        boolean activo
+    }
+    usuarios {
+        uuid id PK
+        uuid empresa_id FK
+        text nombre
+        text correo
+        text hash_contrasena
+        text_array roles
+        boolean activo
+        timestamptz creado_en
+    }
+    proyectos {
+        uuid id PK
+        uuid empresa_id FK
+        text codigo
+        text nombre
+        text ubicacion
+        boolean activo
+    }
+    miembros_proyecto {
+        uuid proyecto_id PK,FK
+        uuid usuario_id PK,FK
+    }
+    catalogo_ensayos {
+        uuid id PK
+        text codigo
+        text nombre
+        text metodo
+        text categoria
+        boolean activo
+    }
+    solicitudes {
+        uuid id PK
+        text codigo
+        uuid proyecto_id FK
+        uuid creado_por FK
+        text titulo
+        text estado_solicitud
+        text observaciones
+        date fecha_objetivo
+        integer version
+        timestamptz creado_en
+        timestamptz actualizado_en
+    }
+    muestras {
+        uuid id PK
+        uuid solicitud_id FK
+        text codigo_cliente
+        text calicata_sondaje
+        text material
+        numeric profundidad_inicial
+        numeric profundidad_final
+        numeric cantidad
+        text unidad
+        text observaciones
+        timestamptz recibido_en
+        uuid recibido_por FK
+        text transporte
+        numeric cantidad_recibida
+        text condicion
+        text observaciones_recepcion
+        text codigo_recepcion
+        text codigo_laboratorio
+    }
+    ensayos_muestra {
+        uuid id PK
+        uuid muestra_id FK
+        uuid ensayo_id FK
+        uuid tecnico_id FK
+        text estado_ensayo
+        date inicio_previsto
+        date fin_previsto
+        timestamptz iniciado_en
+        timestamptz completado_en
+        text observaciones
+    }
+    informes {
+        uuid id PK
+        uuid solicitud_id FK
+        integer version
+        text nombre
+        text clave_archivo
+        text sha256
+        integer tamano_bytes
+        uuid subido_por FK
+        timestamptz creado_en
+    }
+    actividad {
+        bigint id PK
+        uuid solicitud_id FK
+        uuid autor_id FK
+        text tipo
+        text mensaje
+        jsonb detalle
+        boolean interno
+        timestamptz creado_en
+    }
+    sesiones {
+        text hash_token PK
+        uuid usuario_id FK
+        timestamptz creado_en
+        timestamptz ultimo_acceso
+        timestamptz vence_en
+    }
+    limites_intentos {
+        text clave_limite PK
+        integer numero_intentos
+        timestamptz inicio_ventana
+    }
+    migraciones_esquema {
+        integer version PK
+        timestamptz aplicado_en
+    }
+    usuarios |o--o{ actividad : "autor_id"
+    solicitudes |o--o{ actividad : "solicitud_id"
+    catalogo_ensayos ||--o{ ensayos_muestra : "ensayo_id"
+    muestras ||--o{ ensayos_muestra : "muestra_id"
+    usuarios |o--o{ ensayos_muestra : "tecnico_id"
+    solicitudes ||--o{ informes : "solicitud_id"
+    usuarios ||--o{ informes : "subido_por"
+    proyectos ||--o{ miembros_proyecto : "proyecto_id"
+    usuarios ||--o{ miembros_proyecto : "usuario_id"
+    usuarios |o--o{ muestras : "recibido_por"
+    solicitudes ||--o{ muestras : "solicitud_id"
+    empresas ||--o{ proyectos : "empresa_id"
+    usuarios ||--o{ sesiones : "usuario_id"
+    usuarios ||--o{ solicitudes : "creado_por"
+    proyectos ||--o{ solicitudes : "proyecto_id"
+    empresas |o--o{ usuarios : "empresa_id"
