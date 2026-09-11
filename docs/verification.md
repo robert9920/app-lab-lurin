@@ -55,3 +55,31 @@ Usa el nombre real de tu entorno si difiere de `lab-lc`. Detén primero el servi
 ## Límites de esta verificación
 
 No se probó una impresora física: seleccionar A4, tamaño real/100 % y confirmar los márgenes de la impresora. No se aplicaron permisos de un rol runtime de producción ni se validaron Blob, certificados, red, respaldos/restauración o despliegue real en Azure. La guía de producción describe esos pasos. No se modificaron las dependencias Python; su auditoría de vulnerabilidades no se repitió en esta revisión.
+
+
+## Revisión de administración y producción · 11/09/2026
+
+Esta revisión complementa la evidencia anterior. No se desplegaron recursos Azure ni se modificaron bases de trabajo del usuario.
+
+| Comprobación ejecutada | Resultado |
+|---|---|
+| Base nueva aislada | lab_lc_release_test, PostgreSQL 17 en 127.0.0.1:55432; 01/02/03 instalados desde cero, 13 tablas |
+| Backend pytest | 29 pruebas aprobadas: sesiones, alcance de proyectos/técnicos, borradores, transiciones, recepción, PDF y administración |
+| Frontend Vitest | 6 pruebas aprobadas; incluye payload de proyecto sin campos extra y selección inicial editable por empresa |
+| Navegador Chrome, frontend construido + Functions | 2 pruebas aprobadas: crear/restablecer cuenta y login; crear proyecto con cuatro campos, comprobar preselección y desmarcar |
+| Lint | ESLint y Ruff sin errores |
+| Build | Vite completado; frontend servido con server.mjs, sin usar servidor de desarrollo |
+| Auditorías | npm audit y pip-audit sin vulnerabilidades conocidas reportadas |
+| Rol runtime en base aislada | SELECT catálogo e INSERT usuarios/informes permitidos; UPDATE actividad y CREATE en public denegados |
+| Paquetes | Patrones de exclusión comprobados con casos de secretos/cachés; archivos requeridos y CA pública presentes |
+| Servidor construido | /healthz y recarga de URL interna respondieron correctamente; proxy ejercitado en las pruebas de navegador |
+| Certificados públicos | Dos CA descargadas de emisores oficiales por HTTPS; CA=true, firma propia y fechas comprobadas; huellas en api/certs/README.md |
+| Revisión visual | Modal de alta revisado en captura: empresa, proyectos preseleccionados y exclusión manual legibles |
+
+Se corrigió el campo project_ids inesperado del formulario de proyectos, se introdujo una lista explícita de campos para altas y mensajes seguros que identifican el campo inválido. La creación de proyectos inserta membresías de su empresa en la misma transacción y audita los usuarios asignados. No se modifica la estructura de las 13 tablas ni se requiere migración de datos local; Mermaid conserva su validez.
+
+Durante la ejecución, el aislamiento de Windows bloqueó inicialmente esbuild, directorios temporales de pip-audit y procesos de revisión. Las comprobaciones se repitieron mediante ejecución autorizada y finalizaron. Una prueba de navegador falló por codificación de sus textos; se corrigió UTF-8 y ambas pruebas finalizaron correctamente.
+
+Pendiente en Azure: comprobar compilación remota Linux/Oryx, PM2 provisto por App Service, indexación de Functions en Flex, VPN/DNS privado, rutas de certificados montados, RBAC/Blob, conexión PostgreSQL TLS, alertas y restauración real. Las pruebas locales no validan esos recursos. B1/Flex se documentan sin slots; conservar paquetes para reversión.
+
+La inspección anterior de lab_lc_v3 mostró cero sesiones en ese momento e inicios de la cuenta manual en actividad. La prueba nueva confirma inserción durante login y eliminación al logout; no atribuye retrospectivamente la ausencia observada a una causa específica.

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { Plus, Users, Building2, FolderKanban, TestTubes } from "lucide-react";
+import { adminPayload, companySelection } from "../services/admin";
 import { api, messageOf } from "../services/api";
 import {
   PageHead,
@@ -73,13 +74,7 @@ export default function Admin() {
         await api.post(`/management/users/${form.id}/password`, {
           password: form.password,
         });
-      } else
-        await api.post(`/management/${modal}`, {
-          ...form,
-          ...(modal === "users"
-            ? { organization_id: form.organization_id || null }
-            : {}),
-        });
+      } else await api.post(`/management/${modal}`, adminPayload(modal, form));
       setModal("");
       await refresh();
     } catch (e) {
@@ -93,8 +88,24 @@ export default function Admin() {
       <Field label={label}>
         <input
           type={type}
-          minLength={type === "password" ? 15 : undefined}
-          maxLength={type === "password" ? 128 : undefined}
+          minLength={
+            type === "password"
+              ? 15
+              : modal === "projects" && key === "name"
+                ? 3
+                : key === "code" && modal === "projects"
+                  ? 2
+                  : undefined
+          }
+          maxLength={
+            type === "password"
+              ? 128
+              : modal === "projects"
+                ? key === "code"
+                  ? 100
+                  : 250
+                : undefined
+          }
           autoComplete={type === "password" ? "new-password" : undefined}
           required
           value={form[key] || ""}
@@ -256,11 +267,14 @@ export default function Admin() {
                   }
                   value={form.organization_id || ""}
                   onChange={(e) =>
-                    setForm({
-                      ...form,
-                      organization_id: e.target.value,
-                      project_ids: [],
-                    })
+                    setForm(
+                      companySelection(
+                        modal,
+                        form,
+                        e.target.value,
+                        data.projects,
+                      ),
+                    )
                   }
                 >
                   <option value="">Seleccionar empresa</option>
@@ -297,7 +311,11 @@ export default function Admin() {
                 <span className="field-label">Proyectos asignados</span>
                 <div className="assay-chips">
                   {data.projects
-                    .filter((p) => p.organization_id === form.organization_id)
+                    .filter(
+                      (p) =>
+                        p.organization_id === form.organization_id &&
+                        (p.active || form.project_ids.includes(p.id)),
+                    )
                     .map((p) => (
                       <label key={p.id}>
                         <input

@@ -1,0 +1,27 @@
+[
+  {
+    "name": "NODE_ENV",
+    "value": "production",
+    "slotSetting": false
+  },
+  {
+    "name": "SCM_DO_BUILD_DURING_DEPLOYMENT",
+    "value": "true",
+    "slotSetting": false
+  },
+  {
+    "name": "NPM_CONFIG_PRODUCTION",
+    "value": "false",
+    "slotSetting": false
+  },
+  {
+    "name": "API_TARGET",
+    "value": "https://FUNCTIONS.azurewebsites.net",
+    "slotSetting": false
+  },
+  {
+    "name": "FUNCTION_PROXY_KEY",
+    "value": "REEMPLAZAR",
+    "slotSetting": false
+  }
+]

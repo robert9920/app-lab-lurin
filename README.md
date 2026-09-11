@@ -4,7 +4,7 @@ Aplicación de solicitudes, recepción, ensayos e informes. React JavaScript + V
 
 ## Cambios de esta versión
 
-La base nueva es **lab_lc_v3**, independiente de lab_lc y lab_lc_v2. El código v3 requiere el esquema v3 en español; no apuntarlo a la base anterior. El instalador no migra, borra ni modifica registros de la base anterior. Hay 13 tablas y un solo registro por muestra desde la solicitud hasta la recepción. Los originales de Referencia siguen siendo material de consulta; no se importan automáticamente.
+La base local es **lab_lc_v3**; producción nueva usa **lab_lc** en Azure. Las bases históricas locales quedan intactas. El código v3 requiere el esquema v3 en español; no apuntarlo a la base anterior. El instalador no migra, borra ni modifica registros de la base anterior. Hay 13 tablas y un solo registro por muestra desde la solicitud hasta la recepción. Los originales de Referencia siguen siendo material de consulta; no se importan automáticamente.
 
 El acceso utiliza correo y contraseña. El administrador crea cuentas y restablece contraseñas en Administración. No se envían correos, invitaciones ni enlaces. No hay MFA ni recuperación automática por correo.
 
@@ -16,12 +16,12 @@ Requisitos instalados en Windows: Anaconda o Miniconda, PostgreSQL 17 (servicio 
 
 ### Preparar PostgreSQL una sola vez
 
-En pgAdmin o psql, conectado a la base `postgres`, ejecuta `sql/00_create_database.sql` fuera de una transacción. Crea **lab_lc_v3**, no lab_lc. Usa un usuario con permiso de crear el esquema en esa base. No elimines la base anterior.
+En pgAdmin o psql, conectado a la base `postgres`, ejecuta `sql/00_create_database_local.sql` fuera de una transacción. Crea **lab_lc_v3**, no lab_lc. Usa un usuario con permiso de crear el esquema en esa base. No elimines la base anterior.
 
 Con psql, sustituyendo usuario, host y puerto por los tuyos:
 
 ```bat
-psql -h localhost -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -f sql/00_create_database.sql
+psql -h localhost -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -f sql/00_create_database_local.sql
 ```
 
 Si lab_lc_v3 ya existe, no repitas CREATE DATABASE. La instalación siguiente verifica que el esquema sea v3 o que la base esté vacía.
@@ -91,7 +91,7 @@ Si un puerto está ocupado, cierra tu proceso anterior o elige puertos distintos
 
 | Variable del backend | Uso | Valor local / predeterminado |
 |---|---|---|
-| DATABASE_URL | Conexión privada SQLAlchemy/psycopg a PostgreSQL | Obligatoria, base lab_lc_v3 |
+| DATABASE_URL | Conexión privada SQLAlchemy/psycopg a PostgreSQL | Obligatoria: lab_lc_v3 local / lab_lc Azure |
 | APP_ENV | Activa las restricciones de producción | development |
 | APP_ORIGIN | Origen exacto permitido para escrituras | http://localhost:5173 |
 | STORAGE_MODE | Adaptador de documentos | local |
@@ -181,7 +181,7 @@ Los gráficos expresan cantidades, no horas, productividad ajustada por compleji
 
 ## SQL, contratos y mantenimiento
 
-Orden de instalación manual: 00_create_database.sql conectado a postgres; después 01_schema.sql, 02_catalog.sql y opcionalmente 03_demo.sql conectado a lab_lc_v3. El comando migrate equivale al esquema y catálogo. requirements.in declara las dependencias; requirements.lock.txt fija las 35 versiones de producción auditadas y requirements.txt lo incluye. El SQL de esquema es la migración inicial v3, con registro en migraciones_esquema; no se ejecuta repetidamente sobre una base instalada. Los cambios futuros requieren migraciones nuevas revisadas.
+Orden de instalación manual: 00_create_database_local.sql conectado a postgres; después 01_schema.sql, 02_catalog.sql y opcionalmente 03_demo.sql conectado a lab_lc_v3. El comando migrate equivale al esquema y catálogo. requirements.in declara las dependencias; requirements.lock.txt fija las 35 versiones de producción auditadas y requirements.txt lo incluye. El SQL de esquema es la migración inicial v3, con registro en migraciones_esquema; no se ejecuta repetidamente sobre una base instalada. Los cambios futuros requieren migraciones nuevas revisadas.
 
 `docs/database.mmd` y `docs/database.svg` muestran las 13 tablas. `docs/openapi.json` enumera las rutas actuales y validaciones. `docs/schema-columns.json` captura los campos exportados, sin registros. Para regenerarlos:
 
@@ -217,7 +217,7 @@ E2E con Chrome y ambos servidores activos: configura LAB_E2E_URL (predeterminado
 
 ## Producción en Azure
 
-La configuración de producción se detalla en [docs/deployment.md](docs/deployment.md), con instalación, permisos, publicación, respaldo y restauración. El frontend requiere **client completo**, incluido server.mjs, package.json, package-lock.json y dist. No publiques solo dist en App Service para este diseño: el servidor Node realiza el proxy a Functions.
+La configuración de producción se detalla en [docs/deployment.md](docs/deployment.md), con instalación, permisos, publicación, respaldo y restauración. El frontend requiere **client completo**, incluidos server.mjs, package.json, package-lock.json y las fuentes para generar dist en Azure. No publiques solo dist en App Service para este diseño: el servidor Node realiza el proxy a Functions.
 
 El arranque acordado es `npm start`; escucha process.env.PORT. Microsoft documenta la configuración de Node y comandos de arranque; revisar supervisión/reinicio y la alternativa PM2 para una operación sostenida. [Documentación de App Service](https://learn.microsoft.com/en-us/azure/app-service/configure-language-nodejs).
 
@@ -225,7 +225,7 @@ El arranque acordado es `npm start`; escucha process.env.PORT. Microsoft documen
 
 | Síntoma | Acción |
 |---|---|
-| 500 tras cambiar de versión | Verifica que DATABASE_URL apunte a lab_lc_v3 con esquema instalado. Reinicia func start. No ejecutes SQL v3 en lab_lc. |
+| 500 tras cambiar de versión | Verifica que DATABASE_URL apunte a lab_lc_v3 con esquema instalado. Reinicia func start. No ejecutes SQL nuevo sobre bases históricas; lab_lc de Azure se instala desde cero. |
 | 409 al ingresar con servidor antiguo | Reinicia el backend: los módulos cargados deben corresponder al esquema v3; borra la cookie solo si persiste el error. |
 | 403 al guardar | Abre exactamente APP_ORIGIN; verifica cookie y CSRF, inicia sesión de nuevo y comprueba el rol. |
 | 401 | Sesión vencida, cuenta deshabilitada, contraseña o permisos modificados; inicia sesión otra vez. |
@@ -434,3 +434,33 @@ Versiones del esquema instaladas. Esta base nueva comienza en la versión 3.
 | `aplicado_en` | `timestamptz` | Sí | `now()` | — | Instante de instalación de la versión del esquema. |
 
 <!-- END FIELD DICTIONARY -->
+
+## Administración y sesiones: actualización de producción
+
+La empresa seleccionada al crear una cuenta preselecciona todos sus proyectos activos; el administrador puede desmarcar cualquiera. Cambiar la empresa durante el alta reemplaza esa selección. Al editar una cuenta no se amplían sus permisos automáticamente; cambiar su empresa limpia la selección para que el administrador la confirme. Un proyecto nuevo se asigna a todos los usuarios de su empresa, incluso cuentas deshabilitadas que siguen sin poder acceder. No cambia roles ni asignaciones operativas de técnicos. No se modifica retroactivamente ninguna selección anterior.
+
+`sesiones` guarda acceso temporal, no un registro permanente por usuario: cada login genera una cookie aleatoria y guarda solo su hash. `usuario_id` referencia usuarios; `creado_en` registra el inicio; `ultimo_acceso` se actualiza al usar el portal y `vence_en` fija el máximo de ocho horas por defecto. Inactividad: 30 minutos por defecto. Cierre de sesión elimina la fila; cambios de contraseña/permisos o deshabilitación revocan sesiones. La limpieza elimina las caducadas. Cerrar una pestaña no equivale a cerrar sesión. Las pestañas del mismo navegador/origen comparten cookie; otro navegador puede mantener otra sesión de la misma cuenta. Las cuentas SQL no reciben trato especial ni sesiones precargadas.
+
+Diagnóstico seguro, conectado a la misma base que usa la API, **mientras la cuenta permanece conectada**:
+
+```sql
+SELECT current_database(), inet_server_port();
+SELECT u.nombre, u.correo, s.creado_en, s.ultimo_acceso, s.vence_en,
+       (s.vence_en > now() AND s.ultimo_acceso > now() - interval '30 minutes') AS vigente
+FROM sesiones s JOIN usuarios u ON u.id = s.usuario_id
+ORDER BY s.creado_en DESC;
+SELECT u.nombre, a.mensaje, a.creado_en
+FROM actividad a LEFT JOIN usuarios u ON u.id = a.autor_id
+WHERE a.mensaje IN ('Inicio de sesión', 'Cierre de sesión')
+ORDER BY a.creado_en DESC LIMIT 30;
+```
+
+Actualizar la consulta en el gestor SQL y terminar cualquier transacción antigua antes de comparar. No consultar ni compartir hash_token o hash_contrasena. Ajustar los 30 minutos si cambia SESSION_IDLE_MINUTES. Un historial de login sin una fila actual puede deberse a cierre, caducidad o revocación; no demuestra una falla.
+
+### Local y Azure
+
+Local permanece en **lab_lc_v3**; creación con `sql/00_create_database_local.sql`. En dos ventanas Anaconda: frontend `cd client` y `npm run dev`; backend `conda activate lab-lc`, `cd api`, instalar requirements-dev.txt cuando corresponda y `func start`. Conservar APP_ORIGIN=http://localhost:5173 y DATABASE_URL privada apuntando a lab_lc_v3; API puerto 7071. No se necesita Docker.
+
+Producción nueva usa **lab_lc**: `sql/00_create_database.sql`, luego 01_schema.sql, 02_catalog.sql y 04_runtime_permissions.sql con el rol runtime creado previamente. No ejecutar 03_demo.sql. Esquema 3 no significa que el nombre de base deba tener versión. Los scripts nunca borran bases existentes.
+
+La guía completa y vigente de creación de recursos, VPN/DNS privado, Blob, TLS, SQL, VS Code, variables y recuperación está en [docs/deployment.md](docs/deployment.md). Sus instrucciones de producción reemplazan cualquier referencia histórica a publicar lab_lc_v3. `npm run build` crea dist, no un ZIP; el despliegue principal publica client con build remoto, servidor proxy y PM2. Abrir api/client por separado en VS Code para aplicar sus ajustes. Ninguna comprobación local certifica los recursos Azure aún no creados.

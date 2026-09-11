@@ -1,7 +1,7 @@
--- OPCIONAL, producción. Ejecutar como propietario del esquema en lab_lc_v3.
+-- OPCIONAL, producción. Ejecutar como propietario del esquema en la base de destino (lab_lc en Azure; lab_lc_v3 local).
 -- Crear previamente el rol LOGIN lab_runtime y asignarle contraseña por un canal seguro.
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
-GRANT CONNECT ON DATABASE lab_lc_v3 TO lab_runtime;
+DO $$ BEGIN EXECUTE format('GRANT CONNECT ON DATABASE %I TO lab_runtime', current_database()); END $$;
 GRANT USAGE ON SCHEMA public TO lab_runtime;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO lab_runtime;
 GRANT INSERT, UPDATE, DELETE ON empresas,usuarios,proyectos,miembros_proyecto,catalogo_ensayos,

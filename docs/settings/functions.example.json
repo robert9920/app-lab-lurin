@@ -1,0 +1,42 @@
+[
+  {
+    "name": "APP_ENV",
+    "value": "production",
+    "slotSetting": false
+  },
+  {
+    "name": "APP_ORIGIN",
+    "value": "https://PORTAL.azurewebsites.net",
+    "slotSetting": false
+  },
+  {
+    "name": "DATABASE_URL",
+    "value": "postgresql+psycopg://lab_runtime:REEMPLAZAR@SERVIDOR.postgres.database.azure.com:5432/lab_lc?sslmode=verify-full&sslrootcert=/home/site/wwwroot/certs/azure-postgresql-roots.pem",
+    "slotSetting": false
+  },
+  {
+    "name": "STORAGE_MODE",
+    "value": "azure",
+    "slotSetting": false
+  },
+  {
+    "name": "STORAGE_ACCOUNT_URL",
+    "value": "https://CUENTA.blob.core.windows.net",
+    "slotSetting": false
+  },
+  {
+    "name": "STORAGE_CONTAINER",
+    "value": "lab-informes",
+    "slotSetting": false
+  },
+  {
+    "name": "SESSION_IDLE_MINUTES",
+    "value": "30",
+    "slotSetting": false
+  },
+  {
+    "name": "SESSION_HOURS",
+    "value": "8",
+    "slotSetting": false
+  }
+]

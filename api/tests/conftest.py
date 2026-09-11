@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 os.environ["DATABASE_URL"] = os.getenv(
     "TEST_DATABASE_URL", "postgresql+psycopg://lab@127.0.0.1:55432/lab_lc_v3_test"
 )
-if urlparse(os.environ["DATABASE_URL"]).path != "/lab_lc_v3_test":
+if urlparse(os.environ["DATABASE_URL"]).path not in ("/lab_lc_v3_test", "/lab_lc_release_test"):
     raise RuntimeError("Pruebas limitadas a lab_lc_v3_test")
 os.environ["APP_ENV"] = "development"
 os.environ["APP_ORIGIN"] = "http://localhost:5173"

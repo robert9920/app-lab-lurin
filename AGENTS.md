@@ -6,12 +6,12 @@ Dos raíces desplegables: client (React JavaScript, Vite, Tailwind CSS) y api (P
 
 La instrucción del usuario reemplaza el flujo Entra de la skill azure-fullstack-entra-postgres. La aplicación usa cuentas propias y contraseña Argon2id, sesiones opacas y CSRF. No reintroducir MFA, Fernet, correo, invitaciones, enlaces de activación, recuperación por correo ni JWT propios. La identidad administrada de Azure para Blob es apropiada.
 
-No se requieren agentes adicionales. Trabajar dentro de la tarea y conservar los cambios del usuario. No modificar Referencia ni la base anterior lab_lc.
+No se requieren agentes adicionales. Trabajar dentro de la tarea y conservar los cambios del usuario. No modificar Referencia ni bases históricas locales. La nueva base oficial de Azure se llama lab_lc.
 
 ## Modelo y reglas
 
 - El esquema v3 tiene exactamente 13 tablas: empresas, usuarios, proyectos, miembros_proyecto, catalogo_ensayos, solicitudes, muestras, ensayos_muestra, informes, actividad, sesiones, limites_intentos y migraciones_esquema.
-- Se instala en una base independiente lab_lc_v3. No migrar ni eliminar registros de lab_lc. El SQL inicial es versión 3; los próximos cambios necesitan nuevas migraciones.
+- Local usa lab_lc_v3; producción nueva usa lab_lc. No migrar ni eliminar bases históricas locales. El SQL inicial es versión 3; los próximos cambios necesitan nuevas migraciones.
 - Una muestra mantiene su identidad desde solicitud hasta recepción. No introducir arribos, bultos, muestras duplicadas, órdenes ni custodia. Mezclas: una muestra y componentes en observaciones.
 - Una pareja muestra_id/ensayo_id representa un ensayo y es única. Cantidades desconocidas son NULL; nunca confundirlas con cero.
 - Una recepción conforme habilita iniciar/retomar/completar. Las condiciones restantes bloquean esas acciones. Las correcciones de recepción requieren motivo e historial, y no pueden invalidar material con ensayos RUNNING/COMPLETED.
@@ -72,7 +72,7 @@ python -m ruff check blueprints services tests config.py database.py errors.py f
 python -m ruff format blueprints services tests config.py database.py errors.py function_app.py http_helpers.py manage.py security.py validation.py
 ```
 
-No pasar --exclude con valores que anulen la exclusión de entornos virtuales. Acotar los directorios de lint/formato al código. Tests solo contra lab_lc_v3_test, con TEST_DATABASE_URL; los fixtures usan rollback. E2E solo cuentas/proyectos ficticios, con Chrome y LAB_E2E_PASSWORD en entorno privado. No incorporar contraseñas de pruebas en SQL, comandos o código.
+No pasar --exclude con valores que anulen la exclusión de entornos virtuales. Acotar los directorios de lint/formato al código. Tests solo contra lab_lc_v3_test o lab_lc_release_test, con TEST_DATABASE_URL; los fixtures usan rollback. E2E solo cuentas/proyectos ficticios, con Chrome y LAB_E2E_PASSWORD en entorno privado. No incorporar contraseñas de pruebas en SQL, comandos o código.
 
 Mantener package-lock.json y el lock de dependencias Python de producción cuando cambien paquetes. Verificar permisos, sesiones, transiciones, PDF y métricas con datos de borde; no añadir pruebas triviales para cambios cosméticos.
 
@@ -84,5 +84,13 @@ Mantener package-lock.json y el lock de dependencias Python de producción cuand
 - Recepción exige codigo_recepcion/codigo_laboratorio manuales y normalizados. Laboratorio único; recepción compartible. No imprimir muestras no recibidas ni ajenas al técnico.
 - Etiquetas de 95x68 mm, 2x4 en A4, separación 4 mm. Selección de hasta 200 muestras con paginación PDF automática. Renderizar y revisar antes de entregar cambios de formato.
 - Actualizar schema_names.py al modificar nombres físicos; preservar JSON HTTP mediante mapeo explícito, no traducción SQL en runtime. Mantener exactamente 13 tablas y diccionario generado completo.
-- No modificar ni eliminar lab_lc, lab_lc_v2. SQL v3 solo en base nueva. Reiniciar ambos servidores al cambiar DATABASE_URL a v3. No publicar configuraciones privadas.
+- No modificar ni eliminar lab_lc o lab_lc_v2 históricos locales. SQL de creación oficial solo en servidor Azure nuevo; SQL local separado. Reiniciar ambos servidores al cambiar DATABASE_URL a v3. No publicar configuraciones privadas.
 - Pruebas de alcance: filtros, fichas, recepción, work, dashboard, historial, actas/etiquetas y PDF, incluidas asignaciones compartidas y borradores.
+
+## Administración y publicación
+
+- Al crear usuario, la selección inicial contiene todos los proyectos activos de la empresa y es editable. Crear proyecto inserta membresías para todos sus usuarios, incluidos deshabilitados (no habilita sus cuentas). No ampliar roles ni aplicar backfill retroactivo.
+- Altas de usuarios/proyectos y cambios de membresías usan el bloqueo administrativo y una transacción. Auditar IDs asignados sin secretos. Payloads del frontend por lista permitida; nunca enviar todo el estado del modal.
+- sesiones es temporal, actividad conserva eventos. Cerrar, revocar o limpiar elimina sesiones; nunca añadir contraseñas/tokens al diagnóstico.
+- Producción: abrir client y api como carpetas separadas de VS Code. Frontend build remoto y PM2; api remote build Flex. No publicar dist solo ni entornos Windows. docs/deployment.md es la ruta autoritativa.
+- Mantener secretos fuera de los tres mecanismos: Git, zipIgnorePattern de App Service y .funcignore. Certificados PEM públicos solo en api/certs; no claves privadas.

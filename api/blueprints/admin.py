@@ -59,12 +59,24 @@ def admin_organizations(db, req):
 @endpoint
 def admin_projects(db, req):
     u, p = admin(db, req), body(req, Project)
+    execute(db, "SELECT pg_advisory_xact_lock(481701)")
     r = one(
         db,
         "INSERT INTO proyectos(empresa_id,codigo,nombre,ubicacion)\n        VALUES(:organization_id,:code,:name,:location) RETURNING *",
         **p.model_dump(),
     )
-    audit(db, u, "PROJECT_CREATED", detail={"id": r["id"]})
+    assigned = rows(
+        db,
+        "INSERT INTO miembros_proyecto(proyecto_id,usuario_id) SELECT :p,id FROM usuarios WHERE empresa_id=:o RETURNING usuario_id",
+        p=r["id"],
+        o=p.organization_id,
+    )
+    audit(
+        db,
+        u,
+        "PROJECT_CREATED",
+        detail={"id": r["id"], "assigned_user_ids": [a["user_id"] for a in assigned]},
+    )
     return r
 
 
@@ -74,6 +86,7 @@ def admin_users(db, req):
     u, p = admin(db, req), body(req, UserCreate)
     if "CLIENT" in p.roles and not p.organization_id:
         raise AppError(400, "Asigna una empresa al cliente.")
+    execute(db, "SELECT pg_advisory_xact_lock(481701)")
     r = one(
         db,
         "INSERT INTO usuarios(nombre,correo,empresa_id,roles,hash_contrasena) VALUES(:n,:e,:o,:roles,:hash) RETURNING id",
@@ -84,7 +97,7 @@ def admin_users(db, req):
         hash=hasher.hash(p.password),
     )
     members(db, r["id"], p.project_ids, p.organization_id)
-    audit(db, u, "USER_CREATED", detail={"id": r["id"], "roles": p.roles})
+    audit(db, u, "USER_CREATED", detail={"id": r["id"], "roles": p.roles, "project_ids": p.project_ids})
     return r
 
 
@@ -113,7 +126,18 @@ def edit_user(db, req):
         u=target["id"],
     )
     execute(db, "DELETE FROM sesiones WHERE usuario_id=:u", u=target["id"])
-    audit(db, u, "USER_ACCESS_CHANGED", detail={"id": target["id"], "roles": p.roles, "active": p.active})
+    audit(
+        db,
+        u,
+        "USER_ACCESS_CHANGED",
+        detail={
+            "id": target["id"],
+            "roles": p.roles,
+            "active": p.active,
+            "project_ids": p.project_ids,
+            "organization_id": organization,
+        },
+    )
     return {"ok": True}
 
 

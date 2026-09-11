@@ -25,11 +25,9 @@ def main():
         from sqlalchemy.engine import make_url
 
         url = make_url(settings()["database"])
-        if url.database not in ("lab_lc_v3", "lab_lc_v3_test"):
-            raise SystemExit(
-                "Este instalador solo admite lab_lc_v3 o lab_lc_v3_test. La base anterior queda intacta."
-            )
-        if args.command == "demo" and settings()["production"]:
+        if url.database not in ("lab_lc", "lab_lc_v3", "lab_lc_v3_test"):
+            raise SystemExit("Este instalador solo admite lab_lc (producción), lab_lc_v3 o lab_lc_v3_test.")
+        if args.command == "demo" and (settings()["production"] or url.database == "lab_lc"):
             raise SystemExit("No se permiten datos ficticios en producción.")
         sql_dir = Path(__file__).resolve().parents[1] / "sql"
         with psycopg.connect(

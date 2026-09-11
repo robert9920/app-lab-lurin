@@ -1,0 +1,22 @@
+{
+  "appService.deploySubpath": ".",
+  "appService.zipIgnorePattern": [
+    "node_modules{,/**}",
+    "dist{,/**}",
+    ".git{,/**}",
+    ".vscode{,/**}",
+    ".env{,.*}",
+    ".local{,/**}",
+    "test-results{,/**}",
+    "playwright-report{,/**}",
+    "e2e{,/**}",
+    "**/*.test.js",
+    "**/*.log",
+    "**/*.pem",
+    "**/*.key",
+    "**/*.pfx",
+    "**/*.p12",
+    "coverage{,/**}",
+    ".npm-cache{,/**}"
+  ]
+}

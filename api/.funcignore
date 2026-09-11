@@ -8,3 +8,16 @@ requirements-dev.txt
 .local/
 local.settings.example.json
 manage.py
+
+venv/
+.python_packages/
+.vscode/
+.git/
+.env*
+*.log
+*.key
+*.pfx
+*.p12
+*.pem
+!certs/*.pem
+pytest-cache-files-*/

@@ -35,7 +35,29 @@ def body(req, model):
         raise AppError(413, "Formulario demasiado grande.")
     try:
         return model.model_validate_json(req.get_body())
-    except (ValidationError, ValueError):
+    except ValidationError as error:
+        labels = {
+            "name": "Nombre",
+            "organization_id": "Empresa",
+            "code": "Código",
+            "location": "Ubicación",
+            "email": "Correo",
+            "password": "Contraseña",
+            "roles": "Roles",
+            "project_ids": "Proyectos",
+        }
+        messages = []
+        for issue in error.errors(include_input=False, include_context=False, include_url=False):
+            key = issue["loc"][0] if issue["loc"] else None
+            label = labels.get(key, "Formulario")
+            if issue["type"] == "extra_forbidden":
+                message = "Formulario: contiene campos no permitidos; recarga la página."
+            else:
+                message = f"{label}: revisa el valor y los requisitos del campo."
+            if message not in messages:
+                messages.append(message)
+        raise AppError(400, " ".join(messages)) from None
+    except ValueError:
         raise AppError(400, "Revisa los campos: valores inválidos, faltantes o inesperados.") from None
 
 

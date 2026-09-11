@@ -11,6 +11,16 @@ if (
     (!target.startsWith("https://") || !process.env.FUNCTION_PROXY_KEY))
 )
   throw new Error("Configure API_TARGET and server-side FUNCTION_PROXY_KEY");
+const targetUrl = new URL(target);
+if (
+  !["http:", "https:"].includes(targetUrl.protocol) ||
+  targetUrl.username ||
+  targetUrl.password ||
+  targetUrl.pathname !== "/" ||
+  targetUrl.search ||
+  targetUrl.hash
+)
+  throw new Error("API_TARGET must be an origin without credentials or path");
 const app = express();
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
@@ -29,6 +39,9 @@ app.use(
     },
     referrerPolicy: { policy: "no-referrer" },
   }),
+);
+app.get("/healthz", (_req, res) =>
+  res.set("Cache-Control", "no-store").json({ ok: true }),
 );
 app.use(
   "/api/auth",

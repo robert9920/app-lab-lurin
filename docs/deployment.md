@@ -1,119 +1,120 @@
-# Puesta en producción · v3
+# Publicación en Azure desde VS Code
 
-## Recursos y separación
+Esta guía prepara recursos **nuevos**. Base oficial: `lab_lc` en Azure PostgreSQL Flexible Server. Local: `lab_lc_v3`. Ambos usan esquema 3; el número del esquema no forma parte del nombre de producción. No modificar bases históricas locales. La aplicación no está certificada como desplegada por ejecutar pruebas locales.
 
-Crear recursos dedicados o un slot de preparación: App Service Linux para Node, Function App Linux Python 3.12 con runtime v4, PostgreSQL Flexible Server, una cuenta privada de Blob para informes y el almacenamiento requerido por el host de Functions. Usar la base **lab_lc_v3**, sin restaurar ni migrar automáticamente lab_lc.
+## 1. Recursos y red antes de publicar
 
-El navegador se comunica únicamente con el origen HTTPS de App Service. server.mjs sirve dist y reenvía /api a una URL fija de Functions. La clave de Functions se agrega en el servidor Node. No se expone al navegador. Las cuentas del portal son propias; no configurar Easy Auth/Entra para el ingreso de los usuarios de este producto.
+Crear en una misma región con disponibilidad de Flex: App Service Linux **Basic B1 / Node 24 LTS**, Functions **Flex Consumption / Python 3.12 / 2048 MB**, PostgreSQL Flexible Server PostgreSQL 17, almacenamiento del host de Functions, almacenamiento de informes StorageV2 Standard y Application Insights. B1 es punto inicial, no una capacidad garantizada; observar carga y ajustar. B1 y Flex no ofrecen el flujo de slots descrito para otros planes: conservar paquetes/configuraciones para reversión. No habilitar Easy Auth: los usuarios acceden con correo y contraseña propios.
 
-El arranque requerido es npm start. El servidor respeta PORT. Microsoft admite comandos personalizados y documenta npm start; actualmente recomienda PM2 para la supervisión de procesos en producción. Mantener npm start para este piloto, configurar reinicio/health check/Always On cuando el plan lo permita y evaluar supervisión antes de ampliar el servicio. [Configuración oficial de Node en App Service](https://learn.microsoft.com/en-us/azure/app-service/configure-language-nodejs).
+Red propuesta `10.40.0.0/16` (cambiar si se superpone con redes corporativas):
 
-## Preparar PostgreSQL
+| Subred | CIDR | Uso/delegación |
+|---|---|---|
+| portal | 10.40.1.0/26 | Integración saliente App Service; Microsoft.Web/serverFarms |
+| functions | 10.40.2.0/24 | Integración Flex; Microsoft.App/environments |
+| endpoints | 10.40.3.0/24 | Endpoints privados, sin delegación |
+| GatewaySubnet | 10.40.4.0/27 | VPN Gateway; nombre obligatorio |
+| dns-inbound | 10.40.5.0/28 | Azure DNS Private Resolver, Microsoft.Network/dnsResolvers |
 
-1. Crear lab_lc_v3 conectado a postgres, con un operador autorizado. Ejecutar 01_schema.sql y 02_catalog.sql conectado a la nueva base.
-2. No ejecutar 03_demo.sql en producción.
-3. Usar una cuenta de migraciones propietaria del esquema y una cuenta de ejecución limitada diferente, por ejemplo lab_runtime. Establecer la contraseña mediante herramienta segura, no incorporarla al SQL.
-4. Ejecutar sql/04_runtime_permissions.sql después de crear lab_runtime. No otorgar al runtime privilegios de crear/borrar tablas ni de modificar los triggers de historial.
-5. Configurar TLS con verificación del nombre y CA: sslmode=verify-full y sslrootcert apuntando al certificado CA vigente y confiable de Azure PostgreSQL. Instalar el certificado público en el paquete o sistema; nunca incluir claves privadas.
-6. Restringir la red al backend. Usar integración VNet y endpoint privado cuando el plan elegido lo admita; limitar firewall a orígenes necesarios.
-7. Inicializar el primer ADMIN mediante manage.py bootstrap desde un equipo de operación con acceso a la base y configuración privada APP_ENV=production. Después crear usuarios en el portal y otorgar los roles operativos necesarios.
+Crear VPN Gateway basado en rutas, SKU VpnGw1, conexión punto a sitio OpenVPN, autenticación por certificado y pool de clientes `172.20.100.0/24` sin solapamientos. Instalar certificado cliente y perfil VPN solo en equipos de operación; nunca en el repositorio. Crear Private Resolver inbound en su subred y configurar su IP como DNS del perfil VPN; volver a descargar el perfil al modificar DNS. Integrar App Service y Functions en sus subredes respectivas.
 
-## Configuración privada de Function App
+Crear PostgreSQL con modo de red que admita **Private Endpoint** (no mezclar con el modo de subred delegada de PostgreSQL); crear endpoint y deshabilitar acceso público después de verificar conectividad. Crear endpoints privados para Functions y Blob de informes. Vincular a la VNet las zonas `privatelink.azurewebsites.net`, `privatelink.postgres.database.azure.com` y `privatelink.blob.core.windows.net`; aceptar los grupos DNS automáticos del endpoint. La zona de App Service debe incluir los registros de Functions y su SCM cuando corresponda. App Service del portal conserva entrada pública HTTPS para clientes externos; Functions, PostgreSQL e informes quedan privados.
 
-| Variable | Valor / requisito |
+El almacenamiento del host y el contenedor de despliegue de Flex son distintos de los informes. Conservar la configuración generada al crear Flex y aplicar los endpoints Blob/Queue/Table que use el host, sus zonas privadas y acceso desde la subred Functions antes de deshabilitar su red pública. No eliminar contenedores de despliegue ni de claves. No aplicar permisos del contenedor de informes como sustituto de los permisos del host.
+
+Antes de publicar: desde el equipo conectado a VPN, resolver con `Resolve-DnsName` los nombres normales de Functions, PostgreSQL y Storage; deben resolver a IP privadas. Probar 443 y 5432 con `Test-NetConnection`. Usar siempre el hostname normal, no una IP ni el nombre privatelink en las conexiones TLS. Si falla DNS/VPN, corregirlo antes del despliegue; no abrir temporalmente todos los servicios a Internet.
+
+Referencias: [integración App Service](https://learn.microsoft.com/en-us/azure/app-service/overview-vnet-integration), [red de Functions](https://learn.microsoft.com/en-us/azure/azure-functions/functions-networking-options), [VPN punto a sitio](https://learn.microsoft.com/en-us/azure/vpn-gateway/point-to-site-about).
+
+## 2. PostgreSQL desde cero
+
+Desde el equipo de operación conectado por VPN, usando VS Code con cliente PostgreSQL o psql:
+
+1. Conectado a `postgres`, ejecutar `sql/00_create_database.sql` fuera de transacción. Crea **lab_lc**. No usar el script local.
+2. Cambiar conexión a `lab_lc` y ejecutar `sql/01_schema.sql` y después `sql/02_catalog.sql`.
+3. **No ejecutar `03_demo.sql`** en producción.
+4. Crear rol LOGIN `lab_runtime` sin superusuario, CREATEDB ni CREATEROLE. Asignar contraseña con un diálogo seguro o `\password lab_runtime` en psql. Conservar al propietario del esquema como cuenta de instalación separada.
+5. Como propietario ejecutar `sql/04_runtime_permissions.sql` en `lab_lc`. El script usa la base de la conexión; verificarla antes con `SELECT current_database();`.
+6. Inicializar el primer administrador con `python manage.py bootstrap` desde `api` en el equipo autorizado, con variables privadas de producción. El comando pregunta correo, nombre y contraseña sin eco. Usar la cuenta runtime para esta operación. Las variables de entorno prevalecen sobre local.settings.json; abrir una ventana exclusiva y cerrarla al finalizar.
+
+En local el script de creación es `00_create_database_local.sql`, seguido de 01, 02 y opcionalmente 03. No se cambia tu `local.settings.json`. `manage.py migrate` acepta los nombres previstos y exige base vacía o esquema compatible; `demo` rechaza siempre `lab_lc`, incluso si APP_ENV se configura mal.
+
+TLS: `sslmode=verify-full`. Se incluye api/certs/azure-postgresql-roots.pem, descargado de los emisores oficiales y verificado el 11/09/2026. Para renovarlo, descargar desde la documentación oficial los certificados raíz públicos **DigiCert Global Root G2** y **Microsoft RSA Root CA 2017**, verificando emisor y vigencia; concatenar PEM en `api/certs/azure-postgresql-roots.pem`. No incorporar certificados intermedios, certificados de servidor ni claves privadas. El paquete admite ese directorio. Usar en Linux `sslrootcert=/home/site/wwwroot/certs/azure-postgresql-roots.pem`; comprobar que exista tras el despliegue. Si el montaje del plan usa otra ruta, configurar la ruta real antes del primer acceso. [TLS y rotación de certificados](https://learn.microsoft.com/en-us/azure/postgresql/security/security-tls).
+
+## 3. PDF: cuenta y contenedor
+
+Crear cuenta StorageV2 Standard, redundancia ZRS donde esté disponible, acceso seguro obligatorio, TLS mínimo 1.2, acceso anónimo de blobs deshabilitado y espacio de nombres jerárquico desactivado. Crear contenedor **lab-informes**, nivel de acceso **Private**. Deshabilitar acceso público de red tras comprobar endpoint privado/DNS. No habilitar sitio web estático ni CORS: el navegador descarga mediante la API.
+
+Habilitar identidad administrada de sistema en Functions. En IAM del contenedor lab-informes, asignarle **Storage Blob Data Contributor**, con alcance del contenedor. Esperar propagación RBAC. `DefaultAzureCredential` usa esa identidad en Azure; no necesita una clave de cuenta para los PDF. Deshabilitar acceso mediante claves compartidas en esta cuenta dedicada si ningún otro consumidor lo requiere.
+
+No crear carpetas: la aplicación genera claves de archivo por solicitud e informe. `informes.clave_archivo` guarda esa referencia; PostgreSQL no contiene el PDF. Cada carga conserva una versión propia. Activar versionado de blobs, eliminación temporal de blobs y contenedores con 30 días iniciales de retención. Ajustar la retención a la política empresarial y evitar reglas lifecycle que eliminen archivos todavía referenciados.
+
+## 4. Variables de Functions y publicación del backend
+
+Plantillas sin secretos en `docs/settings/functions.example.json` y `docs/settings/app-service.example.json`, formato de edición avanzada del portal. Reemplazar marcadores en una copia privada; combinar con los ajustes existentes, no reemplazar la configuración del host. No guardar la copia con secretos en el proyecto.
+
+| Variable propia | Valor |
 |---|---|
-| FUNCTIONS_WORKER_RUNTIME | python |
-| FUNCTIONS_EXTENSION_VERSION | ~4 |
 | APP_ENV | production |
-| APP_ORIGIN | https://dominio-del-portal, sin ruta ni barra final |
-| DATABASE_URL | postgresql+psycopg://lab_runtime:CONTRASENA_CODIFICADA@HOST:5432/lab_lc_v3?sslmode=verify-full&sslrootcert=/ruta/ca.pem |
+| APP_ORIGIN | https://HOST-PORTAL; origen exacto sin ruta/barra final |
+| DATABASE_URL | postgresql+psycopg://lab_runtime:CLAVE_URL_ENCODED@HOST.postgres.database.azure.com:5432/lab_lc?sslmode=verify-full&sslrootcert=/home/site/wwwroot/certs/azure-postgresql-roots.pem |
 | STORAGE_MODE | azure |
-| STORAGE_ACCOUNT_URL | https://CUENTA.blob.core.windows.net |
-| STORAGE_CONTAINER | lab-informes, creado previamente con acceso público deshabilitado |
-| SESSION_IDLE_MINUTES | 30 o valor acordado |
-| SESSION_HOURS | 8 o valor acordado |
-| AzureWebJobsStorage | Configuración protegida de la cuenta del host, según el plan Functions |
+| STORAGE_ACCOUNT_URL | https://CUENTA-INFORMES.blob.core.windows.net |
+| STORAGE_CONTAINER | lab-informes |
+| SESSION_IDLE_MINUTES | 30 |
+| SESSION_HOURS | 8 |
 
-Habilitar identidad administrada de Functions y asignarle Storage Blob Data Contributor **al contenedor de informes**, no a toda la suscripción. services/storage.py usa DefaultAzureCredential. Deshabilitar acceso anónimo de la cuenta, mantener contenedor privado y HTTPS. El acceso privado de red y su resolución DNS deben funcionar desde Functions. No se generan SAS ni enlaces públicos de descarga.
+Codificar caracteres especiales de usuario/contraseña en la URL; nunca poner la URL en comandos compartidos, logs o capturas. Configurar secretos en variables privadas del servicio o referencias Key Vault. No subir local.settings.json. No definir UPLOAD_DIR en Azure. Mantener los ajustes generados para almacenamiento del host y Application Insights. Para esta instalación inicial usar la conexión protegida de almacenamiento del host generada por Azure; su acceso de red privado debe funcionar. Migrar ese host a identidad requiere sus roles específicos, no solo el permiso de informes.
 
-La cuenta del host de Functions es una dependencia de Azure aunque no haya timers. Si se configura mediante identidad administrada, seguir la configuración y roles del host del plan seleccionado; no confundir esos permisos con los del contenedor de informes. [Almacenamiento de Azure Functions](https://learn.microsoft.com/en-us/azure/azure-functions/storage-considerations).
+**Flex:** Python y versión 3.12 son propiedades del runtime del recurso. No copiar como ajustes `FUNCTIONS_WORKER_RUNTIME`, `FUNCTIONS_EXTENSION_VERSION`, `WEBSITE_RUN_FROM_PACKAGE`, `SCM_DO_BUILD_DURING_DEPLOYMENT` ni `ENABLE_ORYX_BUILD` de guías para otros planes. Tampoco Always On; Flex utiliza opciones propias de escalado/always ready. Empezar sin instancias always ready y con concurrencia HTTP 4; revisar latencia de arranque y conexiones antes de abrir acceso amplio. El pool permite hasta cinco conexiones por proceso; dimensionar máximo de instancias y presupuesto de PostgreSQL conjuntamente.
 
-Las credenciales y referencias de Key Vault se administran en configuración del servicio. No publicar local.settings.json. Eliminar de los recursos anteriores las variables FERNET_KEY, MFA, MAIL, SMTP y almacenamiento emulado. No crear procesos de envío ni análisis de documentos.
+Instalar extensión Azure Functions de VS Code, iniciar sesión en la suscripción correcta y **abrir api como carpeta del workspace**. Seleccionar `Azure Functions: Deploy to Function App...`, destino Flex correcto, con compilación remota. La raíz publicada debe contener host.json, function_app.py y requirements.txt. Incluir requirements.lock.txt, schema_names.py, blueprints, services, módulos comunes, logo y certificados públicos. `.funcignore` excluye secretos, PDFs locales, entornos, cachés, pruebas y manage.py. No copiar dependencias de Windows a Linux.
 
-## Publicar backend
+Comprobar en logs que se instalaron requisitos y se descubrieron funciones. Crear/obtener una **host function key** para que el proxy pueda invocar todas las rutas; no usar la master key. Guardarla solo en App Service. Mantener AuthLevel.FUNCTION además de la sesión del usuario. Sin CORS comodín ni Easy Auth. [Despliegue remoto](https://learn.microsoft.com/en-us/azure/azure-functions/functions-deployment-technologies), [ajustes de Flex](https://learn.microsoft.com/en-us/azure/azure-functions/functions-app-settings#flex-consumption-plan).
 
-Validar pruebas y dependencias antes de publicar. Desde api:
+## 5. Frontend: VS Code, build y arranque
 
-```text
-func azure functionapp publish NOMBRE_FUNCTION_APP --python
-```
+`npm run build` genera únicamente `dist`; **no comprime la aplicación ni incluye el servidor proxy**. La ruta principal es publicar **client completo con exclusiones**, y construir en Azure. No seleccionar dist.
 
-O desplegar api con la extensión Azure Functions de VS Code y compilación remota habilitada. Seleccionar Python 3.12. requirements.txt incluye requirements.lock.txt con las 35 versiones auditadas de la entrega; requirements.in conserva los requisitos para futuras actualizaciones. No copiar un entorno Anaconda o .venv de Windows a Linux.
+1. Abrir `client` como carpeta en VS Code para aplicar su `.vscode/settings.json`.
+2. Verificar localmente `npm ci`, `npm run lint`, `npm test`, `npm run build`.
+3. App Service: publicación de código, Linux, Node **24 LTS**, B1; HTTPS Only, TLS mínimo 1.2, Always On habilitado; integración VNet configurada. No contenedor personalizado.
+4. Definir las variables de la tabla siguiente antes de publicar.
+5. Extensión Azure App Service → **Deploy to Web App...** → seleccionar client y el recurso correcto. Confirmar despliegue con build remoto. Se incluyen src, public, index.html, vite.config.js, package.json, package-lock.json, server.mjs y ecosystem.config.cjs. Se excluyen dist local, node_modules, pruebas, secretos y archivos privados.
+6. Confirmar en logs restauración de dependencias y ejecución de Vite. Verificar que dist/index.html exista en la aplicación publicada.
+7. Comando de inicio: **`pm2 start ecosystem.config.cjs --no-daemon`**. El PM2 provisto por la imagen Node supervisa server.mjs en primer plano. `npm start` sigue disponible para ejecutar localmente el paquete construido. No usar vite preview en producción.
 
-.funcignore excluye configuraciones locales, .local, pruebas y manage.py. Confirmar que el paquete contenga function_app.py, blueprints, services, security.py, validation.py, config.py, database.py, schema_names.py, http_helpers.py, errors.py, host.json y data/logo.png.
-
-Todos los endpoints usan AuthLevel.FUNCTION además de autorización de la aplicación. Obtener una Function Key para el proxy y almacenarla solo en App Service. Restringir acceso de red de Functions al frontend o a la red del servicio. No habilitar CORS comodín: el navegador utiliza el proxy del mismo origen.
-
-## Publicar frontend
-
-Configurar App Service Linux con una versión Node soportada compatible con Node >=22. Preparar desde client:
-
-```text
-npm ci
-npm run lint
-npm test
-npm run build
-```
-
-Publicar un paquete cuya raíz contenga **server.mjs, package.json, package-lock.json y dist/**. Restaurar dependencias de producción con npm ci --omit=dev en el proceso de despliegue Linux. Si se construye en App Service, incluir src, index.html y vite.config.js y permitir las devDependencies durante el build. No publicar solo dist ni node_modules de Windows.
-
-Variables privadas del servidor:
-
-| Variable | Valor |
+| Variable App Service | Valor |
 |---|---|
 | NODE_ENV | production |
-| API_TARGET | https://NOMBRE_FUNCTION_APP.azurewebsites.net (sin /api) |
-| FUNCTION_PROXY_KEY | Clave de Functions, privada |
-| PORT | Definida por la plataforma |
+| SCM_DO_BUILD_DURING_DEPLOYMENT | true (solo App Service, no Flex) |
+| NPM_CONFIG_PRODUCTION | false (Vite/Tailwind necesitan devDependencies al construir) |
+| API_TARGET | https://HOST-FUNCTIONS.azurewebsites.net, sin /api |
+| FUNCTION_PROXY_KEY | host function key privada |
 
-Configurar comando de inicio **npm start**. HTTPS Only, TLS mínimo vigente, redirección HTTP a HTTPS, certificado del dominio y APP_ORIGIN coincidente. El proxy agrega cabeceras Helmet y limita intentos por IP; PostgreSQL comparte el límite por correo entre instancias. No se necesitan variables VITE_ de autenticación.
+No fijar PORT: el servidor utiliza el puerto de la plataforma. No definir secretos VITE_. Health Check `/healthz` verifica el proceso del portal, no la disponibilidad de PostgreSQL/Blob; monitorizar adicionalmente operaciones reales. No publicar mapas de código con secretos ni habilitar logs de cuerpos/cookies.
 
-## Comprobar antes de abrir acceso
+VS Code comprime los archivos al publicar. `.gitignore` controla Git, **no sustituye** appService.zipIgnorePattern ni `.funcignore`. Si se abre la raíz del monorepo, los ajustes anidados no se aplican: abrir cada carpeta por separado como se indica.
 
-- Probar login con ADMIN, MANAGER, TECH y clientes de dos proyectos distintos.
-- Verificar cookies HttpOnly, Secure y SameSite; escritura sin CSRF/origen inválido debe fallar.
-- Comprobar revocación al cambiar contraseña o deshabilitar, y caducidad de sesión.
-- Descargar un PDF autorizado y comprobar que modificar su UUID o proyecto no permita acceso a otro cliente.
-- Cargar un PDF nuevo, verificar acceso inmediato y conservación de la versión anterior.
-- Registrar recepción parcial y comprobar bloqueo de material observado.
-- Recargar URLs de solicitudes, recepción, trabajo e informes; comprobar regreso con filtros.
-- Conciliar dashboard con SQL. Revisar Application Insights sin registrar cuerpos, cookies, tokens ni URL de conexión.
-- Comprobar límites de 20 MiB en API y plataforma. Rechazar archivos sobredimensionados antes del backend en el gateway si se añade uno.
-- Guardar el paquete de aplicación y una copia de seguridad de base/documentos antes del cambio de slot.
+[Node, build y PM2 en App Service](https://learn.microsoft.com/en-us/azure/app-service/configure-language-nodejs).
 
-## Respaldos y restauración
+## 6. Aceptación antes de admitir clientes
 
-Definir retención y objetivos de pérdida/tiempo de recuperación con el propietario del servicio. Activar copias automáticas y recuperación a un instante en PostgreSQL Flexible Server. Activar versionado/soft delete de Blob según políticas de retención. [Respaldo y restauración de PostgreSQL Flexible Server](https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/concepts-backup-restore).
+- Revisar el paquete: sin configuraciones privadas, PDFs locales, claves o entornos Windows; con lockfiles, logo y CA públicos.
+- Probar /healthz, login, persistencia de sesión, cierre y revocación con ADMIN y cuenta creada desde la plataforma.
+- Probar nuevo proyecto y sus asignaciones; empresa ajena denegada; selección de proyectos editable.
+- Probar CSRF/origen incorrectos, borradores exclusivos y técnicos compartiendo solicitud sin ampliar alcance.
+- Cargar PDF válido hasta 20 MiB, descargarlo con usuario autorizado y denegar otra empresa. Confirmar acceso anónimo al blob denegado y disponibilidad inmediata de la versión nueva.
+- Recargar una URL interna y comprobar proxy, cookies Secure/HttpOnly/SameSite y filtros.
+- Verificar DNS privado desde App Service/Functions y acceso administrativo por VPN. La URL pública de Functions no debe permitir acceso desde fuera de la red.
+- Application Insights: alertas 5xx, latencia, fallos Blob y saturación/conexiones de PostgreSQL; no registrar credenciales ni documentación.
 
-Para copia lógica adicional con pg_dump de versión compatible, usar PGPASSFILE privado o solicitud interactiva de contraseña; no argumentos que la expongan:
+## 7. Respaldos y reversión
 
-```text
-pg_dump -h HOST -p 5432 -U USUARIO_RESPALDO -d lab_lc_v3 -Fc -f lab_lc_v3_FECHA.dump
-```
+Configurar PostgreSQL PITR con retención inicial de 30 días y probar una restauración. Ajustar RPO/RTO con el responsable. Copia lógica opcional: `pg_dump -h HOST -U OPERADOR -d lab_lc -Fc -f lab_lc_FECHA.dump`, contraseña interactiva o PGPASSFILE privado, TLS verificado. Respaldar también los blobs/versiones referenciados: el dump no contiene los PDF.
 
-Respaldar también los objetos referenciados en informes.clave_archivo. El dump solo contiene metadatos; **no contiene los PDF**. En local incluir api/.local/uploads; en Azure conservar los blobs/versiones correspondientes y su cuenta/contendor. El cifrado, acceso y retención de las copias son tan importantes como los de producción.
+Restaurar a base nueva con `pg_restore --no-owner --no-privileges --exit-on-error`, sin ejecutar antes 01_schema.sql. Reaplicar permisos runtime. Restaurar archivos a contenedor privado de recuperación y conciliar tamaño/SHA256. Revocar sesiones restauradas antes de habilitar tráfico. Mantener el servicio en mantenimiento durante la restauración coordinada.
 
-Para restaurar, crear una base **nueva vacía**, restaurar el dump con pg_restore --no-owner --no-privileges --exit-on-error y aplicar de nuevo los permisos al runtime. No ejecutar 01_schema.sql antes de restaurar un dump con esquema completo. Restaurar documentos en un contenedor privado aparte y verificar tamaño/SHA-256 contra informes. El backend acepta un nombre alternativo de base en DATABASE_URL para recuperación; manage.py migrate/demo solo admite los nombres del piloto para prevenir errores operativos.
+Conservar paquetes frontend/API y configuración de la misma entrega. B1/Flex: revertir ambos mediante redespliegue del paquete anterior; no dar instrucciones de swap de slots inexistentes. No apuntar una entrega a un esquema incompatible. Cualquier cambio futuro de esquema necesita estrategia de reversión propia.
 
-Revocar todas las sesiones de la base restaurada con DELETE FROM sesiones antes de ponerla en servicio; limpiar limites_intentos si corresponde. Configurar un slot con APP_ENV=production y las conexiones nuevas, comprobar permisos y recorrido completo, y solo después cambiar tráfico. Probar esta recuperación regularmente; la mera existencia de un archivo dump no confirma que la restauración funcione.
-
-## Operación
-
-Supervisar errores 5xx, latencia, saturación del pool, conexiones PostgreSQL y fallos de Blob. El máximo por proceso es pool_size=2 + max_overflow=3; considerar número de workers e instancias. Mantener dependencias y runtimes actualizados.
-
-Las cargas escriben Blob antes del commit de metadatos. Un fallo de base después de cargar puede dejar un archivo huérfano; nunca queda visible sin una fila informes. Revisar huérfanos en una tarea de operación con respaldo y antigüedad de seguridad, no borrarlos automáticamente mientras haya cargas activas. No hay temporizadores de negocio.
-
-La versión nueva no altera lab_lc ni lab_lc_v2. Para volver a la aplicación anterior, restaurar su paquete y su configuración original apuntando a la base que utilizaba (lab_lc_v2 para código v2), después de valorar qué operaciones nuevas existen solo en v3. No mezclar esquemas: desplegar frontend/API v3 juntos con lab_lc_v3. Conservar paquete y conexión v2 para revertir; no existe migración histórica automática.
-
-
-Validar además borradores exclusivos del autor, aislamiento entre técnicos en una solicitud compartida, indicador de muestras sin recibir, asignación independiente del estado y etiquetas de 95×68 mm.
+Una carga escribe Blob antes del commit SQL: un fallo puede dejar un archivo huérfano invisible a usuarios. Su limpieza requiere conciliación con informes y antigüedad de seguridad, nunca borrar objetos recientes automáticamente. Probar recuperación periódicamente. Recursos privados, VPN, DNS Resolver y respaldos generan costes adicionales a App Service/Functions.
