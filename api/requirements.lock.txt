@@ -1,4 +1,4 @@
-# Versiones de producción verificadas; regenerar desde requirements.in y auditar.
+# Versiones de producciÃ³n verificadas; regenerar desde requirements.in y auditar.
 annotated-types==0.8.0
 argon2-cffi==25.1.0
 argon2-cffi-bindings==26.1.0
