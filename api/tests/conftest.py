@@ -10,8 +10,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 os.environ["DATABASE_URL"] = os.getenv(
     "TEST_DATABASE_URL", "postgresql+psycopg://lab@127.0.0.1:55432/lab_lc_v3_test"
 )
-if urlparse(os.environ["DATABASE_URL"]).path not in ("/lab_lc_v3_test", "/lab_lc_release_test"):
-    raise RuntimeError("Pruebas limitadas a lab_lc_v3_test")
+if urlparse(os.environ["DATABASE_URL"]).path not in (
+    "/lab_lc_v3_test",
+    "/lab_lc_release_test",
+    "/lab_lc_v4_test",
+    "/lab_lc_v4_unit_test",
+):
+    raise RuntimeError(
+        "TEST_DATABASE_URL debe apuntar a una base ficticia de pruebas admitida, con esquema 4."
+    )
 os.environ["APP_ENV"] = "development"
 os.environ["APP_ORIGIN"] = "http://localhost:5173"
 os.environ["STORAGE_MODE"] = "local"
@@ -46,3 +53,30 @@ def users(db):
     from database import rows
 
     return {u["email"].split("@")[0]: u for u in rows(db, "SELECT * FROM usuarios")}
+
+
+@pytest.fixture(autouse=True)
+def catalog_fixture(monkeypatch):
+    # Only synthetic catalog codes; operational tests never write AppControlHH.
+    from services import projects, workflow
+
+    def catalog(query="", page=1, limit=30, code=None):
+        items = [
+            {"id": "DEMO-001", "code": "DEMO-001", "name": "Recrecimiento demo"},
+            {"id": "DEMO-002", "code": "DEMO-002", "name": "Planta demo"},
+        ]
+        if code is not None:
+            items = [x for x in items if x["code"] == code]
+        else:
+            items = [
+                x for x in items if query.lower() in x["code"].lower() or query.lower() in x["name"].lower()
+            ]
+        return {
+            "items": items[(page - 1) * limit : page * limit],
+            "total": len(items),
+            "page": page,
+            "limit": limit,
+        }
+
+    monkeypatch.setattr(projects, "catalog", catalog)
+    monkeypatch.setattr(workflow, "validate_code", projects.validate_code)

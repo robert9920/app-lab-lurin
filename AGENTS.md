@@ -1,96 +1,51 @@
-# Guía de desarrollo · Laboratorio Lara Consulting v3
+# Guía de desarrollo · Laboratorio Lara Consulting · esquema 4
 
-## Stack y alcance
+## Alcance y trabajo
 
-Dos raíces desplegables: client (React JavaScript, Vite, Tailwind CSS) y api (Python 3.12, Azure Functions HTTP con blueprints). PostgreSQL mediante SQLAlchemy con consultas parametrizadas y pool acotado. No sustituir PostgreSQL por memoria o SQLite.
+client: React JavaScript/Vite/Tailwind. api: Python 3.12/Azure Functions HTTP blueprints, SQLAlchemy y PostgreSQL. No sustituir persistencia por SQLite/memoria. No se requieren agentes adicionales. Conservar Referencia, configuraciones privadas, archivos PDF y cambios ajenos. No desplegar ni modificar bases reales sin autorización explícita; SQL de actualización se entrega para ejecución controlada.
 
-La instrucción del usuario reemplaza el flujo Entra de la skill azure-fullstack-entra-postgres. La aplicación usa cuentas propias y contraseña Argon2id, sesiones opacas y CSRF. No reintroducir MFA, Fernet, correo, invitaciones, enlaces de activación, recuperación por correo ni JWT propios. La identidad administrada de Azure para Blob es apropiada.
+La instrucción del usuario reemplaza Entra de la skill azure-fullstack-entra-postgres: contraseña Argon2id, sesión opaca y CSRF. No reintroducir MFA, Fernet, correo, invitaciones, activación ni JWT. Blob usa identidad administrada; autorización de usuarios sigue siendo propia.
 
-No se requieren agentes adicionales. Trabajar dentro de la tarea y conservar los cambios del usuario. No modificar Referencia ni bases históricas locales. La nueva base oficial de Azure se llama lab_lc.
+## Datos y migraciones
 
-## Modelo y reglas
+Exactamente once tablas: empresas, usuarios, catalogo_ensayos, solicitudes, muestras, ensayos_muestra, informes, actividad, sesiones, limites_intentos y migraciones_esquema. Nombres físicos en español sin tildes, JSON compatible mediante schema_names.py. No traducción de SQL en runtime.
 
-- El esquema v3 tiene exactamente 13 tablas: empresas, usuarios, proyectos, miembros_proyecto, catalogo_ensayos, solicitudes, muestras, ensayos_muestra, informes, actividad, sesiones, limites_intentos y migraciones_esquema.
-- Local usa lab_lc_v3; producción nueva usa lab_lc. No migrar ni eliminar bases históricas locales. El SQL inicial es versión 3; los próximos cambios necesitan nuevas migraciones.
-- Una muestra mantiene su identidad desde solicitud hasta recepción. No introducir arribos, bultos, muestras duplicadas, órdenes ni custodia. Mezclas: una muestra y componentes en observaciones.
-- Una pareja muestra_id/ensayo_id representa un ensayo y es única. Cantidades desconocidas son NULL; nunca confundirlas con cero.
-- Una recepción conforme habilita iniciar/retomar/completar. Las condiciones restantes bloquean esas acciones. Las correcciones de recepción requieren motivo e historial, y no pueden invalidar material con ensayos RUNNING/COMPLETED.
-- Un informe válido se hace visible al confirmar la carga. No hay publicación manual ni estado de análisis. Mantener PDF máximo 20 MiB/500 páginas, comprobación de estructura y contenido activo, almacenamiento privado y versión nueva en cada carga.
-- Cerrar es una acción independiente de MANAGER: ensayos COMPLETED/CANCELLED e informe disponible. CLOSED permite lectura, sin modificaciones.
-- Actas y etiquetas se generan bajo demanda desde los datos actuales; no se persisten.
-- actividad y informes son inmutables mediante triggers. No borrar versiones ni historial. Correcciones y cancelaciones conservan motivo.
-- Cambios multiobjeto transaccionales: bloquear solicitudes, comprobar version y aumentar el contador. Para lotes de varias solicitudes ordenar bloqueos por UUID. Un error revierte el lote completo.
-- Dashboard consulta toda la base autorizada, nunca los primeros 100 registros de una lista. Definiciones y cada campo están en README.
+Local conserva lab_lc_v3; producción lab_lc. Esquema 4 independiente del nombre. 01 para base vacía; 05 actualiza exclusivamente 3→4 transaccionalmente. No ejecutar 01 en una base existente. Respaldar y detener versiones anteriores antes de 05. No aplicar 05 automáticamente al importar Functions. manage.py migrate es operación explícita de instalación.
 
-## Seguridad y permisos
+solicitudes.proyecto_id es texto: código del catálogo AppControlHH.public.proyecto(id_proyecto,nombre) o EXTERNO para nuevas externas. No FK ni copia del catálogo. empresa_id es snapshot necesario; no cambiarlo al editar usuario. Retirar proyectos/miembros_proyecto y toda asignación de proyectos.
 
-- CLIENT: acceso por miembros_proyecto; pertenecer a una empresa no basta. Sus asignaciones deben pertenecer a esa empresa.
-- CLIENT adicional permite solicitudes y consulta pública del proyecto. No amplía operaciones de TECH: laboratory_access y can_receive siguen exigiendo asignación. Borradores exclusivos del autor en todos los casos.
-- TECH: solicitudes con ensayos propios; solo sus ensayos y muestras. Recepción, actas y etiquetas limitadas a esas muestras; informes de solicitudes autorizadas. Dashboard personal.
-- MANAGER: lectura global y operaciones de laboratorio, incluido cierre.
-- ADMIN: usuarios, contraseñas y maestros; lectura global y dashboard. Operar requiere rol adicional MANAGER o TECH.
-- UI es solo presentación. Resolver proyecto y propiedad de todos los IDs en el backend, incluidas muestras, ensayos y descargas.
-- Leer roles/activo desde PostgreSQL en cada petición. Restablecer contraseña, deshabilitar o cambiar permisos revoca sesiones. Mantener un ADMIN activo.
-- Nunca devolver hash_contrasena, hash_token, clave_archivo ni credenciales. No registrar contraseñas, cookies, CSRF, URL de conexión o contenido PDF. Los endpoints retornan errores genéricos.
-- Notas técnicas se restringen al personal autorizado por ensayo. El JSON del historial no se devuelve al navegador; proyectar campos legibles y filtrar eventos de otras muestras/ensayos para TECH. Los eventos interno=true no se muestran al cliente. Observaciones de recepción y comentarios públicos sí son visibles en su proyecto.
-- Configuración privada en api/local.settings.json o variables del servidor; no VITE_ secrets ni almacenamiento de credenciales en navegador.
-- Cookies HttpOnly/SameSite y Secure en producción; Origin exacto y CSRF en escrituras. Límite de intentos persistente entre instancias.
-- APP_ENV=production en Azure, HTTPS, PostgreSQL verify-full y Blob privado obligatorios. Prohibir UPLOAD_DIR dentro de client. api/.local se excluye de Git y del paquete Functions.
+Una única empresa interna activa como máximo; ADMIN la elige. PROJECTS_DATABASE_URL exclusivamente privado del backend, permisos SELECT de dos columnas, pool y timeout acotados, transacción READ ONLY. Caída del catálogo no bloquea login ni recursos existentes. Validar código al crear/cambiar un borrador interno; no revalidar códigos históricos solo al consultar.
 
-## Arquitectura y documentación
+Distrito/provincia/departamento obligatorios en formularios y API nueva; NULL histórico permitido sin inventar ubicación. Coordenadas este y norte siempre opcionales, números finitos; cero válido. No añadir datum/zona no solicitados. Sacos entero positivo o NULL, peso kg positivo o NULL; datos recibidos separados. No reutilizar peso como cantidad ni convertir históricos automáticamente.
 
-- blueprints: HTTP; services/workflow.py: reglas operativas; security.py: sesión/permisos; validation.py: modelos Pydantic que rechazan campos extra; services/storage.py: adaptadores local/Blob; services/documents.py: PDF.
-- client/src/services/api.js centraliza Axios y descarga; AuthContext mantiene perfil y CSRF en memoria.
-- Solicitudes, Recepción, Trabajo e Informes son vistas independientes. Filtros/pestaña/origen de regreso se conservan en URL. safeReturn limita destinos internos.
-- Sin temporizadores ni procesos de correo/análisis. Limpieza acotada al login.
-- README: arranque de dos ventanas Anaconda, reglas y diccionario de cada campo. docs/deployment.md: Azure y restauración. docs/verification.md: evidencia real.
-- scripts/export_contracts.py exporta Mermaid, campos y OpenAPI y actualiza el diccionario del README. Ejecutar contra v3, nunca contra la base histórica. Regenerar también SVG con Mermaid CLI.
-- No afirmar producción desplegada o seguridad absoluta sin comprobar el recurso real.
+Una muestra mantiene identidad: no duplicarla al recibir. Declaración recibida protegida de edición/eliminación; ensayos añadibles antes de aprobación. Mezclas en observaciones. Pareja muestra/ensayo única. historial/informes inmutables; documentos generados bajo demanda no añaden tablas.
 
-## Comandos
+## Reglas y permisos
 
-Desde client:
+- CLIENT solo redacta y accede a sus solicitudes, no a todos los clientes de su empresa ni a un proyecto entero. DRAFT exclusivo autor sin excepciones. TECH ve solicitudes con asignación, solo muestras/ensayos propios, informes de esas solicitudes. Roles acumulables conservan permisos expresos; CLIENT no amplía operaciones TECH.
+- MANAGER global salvo borradores ajenos, aprueba/recibe/OT/asigna/cancela/retoma/cierra. ADMIN administra y consulta; para operar necesita rol adicional.
+- Autor puede editar DRAFT/WAITING_ASSAYS/SUBMITTED/OBSERVED. Tras envío no cambia proyecto. Muestras recibidas conservan declaración e IDs. Edición con versión/bloqueo; lotes atómicos y bloqueos ordenados por UUID.
+- Enviar sin todos los ensayos produce WAITING_ASSAYS. Completar selección pasa SUBMITTED. Todos los samples necesitan ensayo antes de aprobar. Recepción MANAGER desde envío, TECH solo APPROVED y muestras propias. Corrección exige motivo; no invalidar material RUNNING/COMPLETED.
+- codigo_ot manual por solicitud después de ≥1 muestra recibida, sin exigir recepción completa/conforme. Corrección con motivo. Asignar/start/resume requieren APPROVED+OT; start/resume además técnico y material OK. Observar/completar RUNNING histórico se conserva sin OT.
+- Asignación independiente de estado, sin ASSIGNED/booleano persistido. allowed_actions servidor autoritativo, intersección en selección masiva. Retomar MANAGER conserva inicio. Cancelar/reanudar motivo. COMPLETED/CANCELLED terminal.
+- Informes PDF privados inmediato tras carga, tamaño/estructura/contenido activo verificados; mantener límites 20 MiB/500 páginas. No revisión ni espera. Nuevas versiones inmutables, carga en APPROVED. Cierre requiere todos resueltos e informe.
+- Etiquetas 95×68 mm, A4 2×4, separación 4 mm; datos declarados/recepción, código laboratorio único y recepción compartible. Solo recibidas/accesibles. No añadir OT/UR a etiqueta.
+- Dashboard agregación SQL completa por alcance, no resultados paginados. Recepción NOT_RECEIVED incluye enviadas pendientes de ensayos; TECH solo aprobadas propias. NO_OT independiente de material observado.
 
-```text
-npm ci
-npm run dev
-npm run lint
-npm test
-npm run build
-npm audit
-npm run test:e2e
-```
+## Seguridad
 
-Desde api, con conda activate lab-lc:
+Permisos de IDs en cada consulta, modificación y descarga. Perfil/roles/activo desde PostgreSQL por petición. Edición de usuario, contraseña o desactivación revoca sesiones; mantener ADMIN activo. Sesiones temporales distintas del historial.
 
-```text
-python -m pip install -r requirements-dev.txt
-python manage.py migrate
-func start
-python -m pytest -q
-python -m ruff check blueprints services tests config.py database.py errors.py function_app.py http_helpers.py manage.py security.py validation.py
-python -m ruff format blueprints services tests config.py database.py errors.py function_app.py http_helpers.py manage.py security.py validation.py
-```
+No exponer hash_contrasena/hash_token/clave_archivo ni URL de conexiones. No logs de cookies/tokens/PDF/contraseñas. Notas internas filtradas; auditoría estructurada interna, descripción legible en UI. Validación central Pydantic extra=forbid y payloads por lista permitida.
 
-No pasar --exclude con valores que anulen la exclusión de entornos virtuales. Acotar los directorios de lint/formato al código. Tests solo contra lab_lc_v3_test o lab_lc_release_test, con TEST_DATABASE_URL; los fixtures usan rollback. E2E solo cuentas/proyectos ficticios, con Chrome y LAB_E2E_PASSWORD en entorno privado. No incorporar contraseñas de pruebas en SQL, comandos o código.
+APP_ENV=production exige HTTPS, PostgreSQL verify-full y Blob privado. Source URL verify-full en producción. Cookie Secure/HttpOnly/SameSite, Origin exacto/CSRF, límites de intentos persistidos. Sin credenciales del servidor en client, VITE_ ni almacenamiento de navegador.
 
-Mantener package-lock.json y el lock de dependencias Python de producción cuando cambien paquetes. Verificar permisos, sesiones, transiciones, PDF y métricas con datos de borde; no añadir pruebas triviales para cambios cosméticos.
+## Arquitectura y comprobaciones
 
+blueprints HTTP; services/workflow.py reglas; security.py alcance/sesión; services/projects.py origen de catálogo; storage.py archivos; documents.py PDF. Axios central, perfil/CSRF en memoria. URL conserva vista/filtros/pestaña/regreso seguro. Navegación superior, tabla y filtros/acciones a derecha; matriz horizontal editable.
 
-## Reglas v3 adicionales
+Desde client: npm ci, npm run dev, npm run lint, npm test, npm run build. Desde api con entorno Anaconda Python3.12: pip install -r requirements-dev.txt, func start, pytest -q, ruff check/format acotados a código. No alterar local.settings.json privado para pruebas. TEST_DATABASE_URL solo base ficticia permitida; fixtures rollback. E2E cuenta privada ficticia. No contraseñas universales en SQL/código. Migración fixture schema_v3.sql solo pruebas.
 
-- Solo CLIENT redacta; borradores exclusivos del autor, sin excepción ADMIN/MANAGER. Retirar DRAFT del filtro de personal. Proteger también consulta directa y recursos derivados.
-- `tecnico_id` es asignación independiente; nunca restaurar ASSIGNED como estado ni guardar un booleano duplicado. `allowed_actions` es autoritativo. OBSERVED solo proviene de RUNNING; resume exclusivo MANAGER vuelve a RUNNING manteniendo iniciado_en.
-- Recepción exige codigo_recepcion/codigo_laboratorio manuales y normalizados. Laboratorio único; recepción compartible. No imprimir muestras no recibidas ni ajenas al técnico.
-- Etiquetas de 95x68 mm, 2x4 en A4, separación 4 mm. Selección de hasta 200 muestras con paginación PDF automática. Renderizar y revisar antes de entregar cambios de formato.
-- Actualizar schema_names.py al modificar nombres físicos; preservar JSON HTTP mediante mapeo explícito, no traducción SQL en runtime. Mantener exactamente 13 tablas y diccionario generado completo.
-- No modificar ni eliminar lab_lc o lab_lc_v2 históricos locales. SQL de creación oficial solo en servidor Azure nuevo; SQL local separado. Reiniciar ambos servidores al cambiar DATABASE_URL a v3. No publicar configuraciones privadas.
-- Pruebas de alcance: filtros, fichas, recepción, work, dashboard, historial, actas/etiquetas y PDF, incluidas asignaciones compartidas y borradores.
+scripts/export_contracts.py exporta desde esquema4 instalado (solo lectura) diccionario completo README, Mermaid, schema-columns y OpenAPI. Regenerar SVG y verificar visualmente. README explica cada campo, instalación y reglas; docs/deployment.md actualización/publicación/respaldos; docs/verification.md resultados reales y pendientes.
 
-## Administración y publicación
-
-- Al crear usuario, la selección inicial contiene todos los proyectos activos de la empresa y es editable. Crear proyecto inserta membresías para todos sus usuarios, incluidos deshabilitados (no habilita sus cuentas). No ampliar roles ni aplicar backfill retroactivo.
-- Altas de usuarios/proyectos y cambios de membresías usan el bloqueo administrativo y una transacción. Auditar IDs asignados sin secretos. Payloads del frontend por lista permitida; nunca enviar todo el estado del modal.
-- sesiones es temporal, actividad conserva eventos. Cerrar, revocar o limpiar elimina sesiones; nunca añadir contraseñas/tokens al diagnóstico.
-- Producción: abrir client y api como carpetas separadas de VS Code. Frontend build remoto y PM2; api remote build Flex. No publicar dist solo ni entornos Windows. docs/deployment.md es la ruta autoritativa.
-- Mantener secretos fuera de los tres mecanismos: Git, zipIgnorePattern de App Service y .funcignore. Certificados PEM públicos solo en api/certs; no claves privadas.
+Revisar .gitignore, .funcignore y client/.vscode/settings.json de forma independiente. No publicar entornos Windows, cachés, .local, secretos ni PDF. Incluir lockfiles y certificados públicos api/certs. No alterar proxy/infra ya desplegada sin necesidad. Functions AuthLevel.FUNCTION; proxy privado App Service. No afirmar Azure verificado por pruebas locales.

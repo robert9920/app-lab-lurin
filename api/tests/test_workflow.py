@@ -13,7 +13,7 @@ from function_app import app
 from security import new_session
 from services import workflow as w
 from services.documents import validate_pdf
-from validation import Action, Reception, RequestCreate, TaskUpdate
+from validation import Action, Reception, RequestCreate, TaskUpdate, WorkOrder
 
 FUNCTIONS = {f.get_function_name(): f.get_user_function() for f in app.get_functions()}
 ORIGIN = "http://localhost:5173"
@@ -142,15 +142,25 @@ def test_reception_correction_reason_and_history(db, users):
 
 
 def test_full_service_and_project_isolation(db, users):
-    project = one(db, "SELECT id FROM proyectos WHERE codigo='DEMO-001'")["id"]
+    project = "DEMO-001"
     assay = one(db, "SELECT id FROM catalogo_ensayos WHERE codigo='HUM'")["id"]
     rid = w.create_request(
         db,
         users["cliente"],
         RequestCreate(
+            district="Lurín",
+            province="Lima",
+            department="Lima",
             project_id=project,
             title="Recorrido completo",
-            samples=[{"client_code": "MEZCLA-01", "notes": "Componentes A y B", "assay_ids": [assay]}],
+            samples=[
+                {
+                    "material": "Suelo",
+                    "client_code": "MEZCLA-01",
+                    "notes": "Componentes A y B",
+                    "assay_ids": [assay],
+                }
+            ],
         ),
     )["id"]
     for user, action, version in ((users["cliente"], "submit", 1), (users["jefe"], "approve", 2)):
@@ -176,16 +186,17 @@ def test_full_service_and_project_isolation(db, users):
             ],
         ),
     )
+    w.work_order(db, users["jefe"], rid, WorkOrder(version=4, codigo_ot="OT-FULL"))
     w.update_tasks(
         db,
         users["jefe"],
         rid,
-        TaskUpdate(version=4, task_ids=[tid], action="assign", technician_id=users["tecnico"]["id"]),
+        TaskUpdate(version=5, task_ids=[tid], action="assign", technician_id=users["tecnico"]["id"]),
     )
-    w.update_tasks(db, users["tecnico"], rid, TaskUpdate(version=5, task_ids=[tid], action="start"))
-    w.update_tasks(db, users["tecnico"], rid, TaskUpdate(version=6, task_ids=[tid], action="complete"))
+    w.update_tasks(db, users["tecnico"], rid, TaskUpdate(version=6, task_ids=[tid], action="start"))
+    w.update_tasks(db, users["tecnico"], rid, TaskUpdate(version=7, task_ids=[tid], action="complete"))
     with pytest.raises(AppError):
-        w.action(db, users["jefe"], rid, Action(version=7, action="close"))
+        w.action(db, users["jefe"], rid, Action(version=8, action="close"))
     execute(
         db,
         "INSERT INTO informes(solicitud_id,version,nombre,clave_archivo,sha256,tamano_bytes,subido_por) VALUES(:rid,1,'Test.pdf',:key,'test',1,:uid)",
@@ -193,7 +204,7 @@ def test_full_service_and_project_isolation(db, users):
         key=str(uuid4()),
         uid=users["tecnico"]["id"],
     )
-    w.action(db, users["jefe"], rid, Action(version=7, action="close"))
+    w.action(db, users["jefe"], rid, Action(version=8, action="close"))
     assert w.detail(db, users["cliente"], rid)["status"] == "CLOSED"
 
 
@@ -235,7 +246,7 @@ def test_pdf_immediate_versions_and_access(db, users):
 def test_dashboard_over_100_requests_and_sql_reconciliation(db, users):
     execute(
         db,
-        "INSERT INTO solicitudes(proyecto_id,creado_por,titulo,estado_solicitud)\n        SELECT '30000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000004','Carga masiva '||n,'APPROVED'\n        FROM generate_series(1,130) n",
+        "INSERT INTO solicitudes(proyecto_id,empresa_id,creado_por,titulo,estado_solicitud)\n        SELECT 'DEMO-001','10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000004','Carga masiva '||n,'APPROVED'\n        FROM generate_series(1,130) n",
     )
     execute(
         db,
@@ -281,11 +292,11 @@ def test_bulk_rolls_back_on_conflict(db, users):
     )
 
 
-def test_schema_thirteen_tables(db):
+def test_schema_eleven_tables(db):
     assert (
         one(
             db,
             "SELECT count(*) n FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'",
         )["n"]
-        == 13
+        == 11
     )

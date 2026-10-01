@@ -1,6 +1,29 @@
 # Publicación en Azure desde VS Code
 
-Esta guía prepara recursos **nuevos**. Base oficial: `lab_lc` en Azure PostgreSQL Flexible Server. Local: `lab_lc_v3`. Ambos usan esquema 3; el número del esquema no forma parte del nombre de producción. No modificar bases históricas locales. La aplicación no está certificada como desplegada por ejecutar pruebas locales.
+La sección 0 actualiza la aplicación existente; las restantes describen una instalación nueva. Base oficial: `lab_lc` en Azure PostgreSQL Flexible Server. Local: `lab_lc_v3`. Ambos usan esquema 4; el número del esquema no forma parte del nombre de producción. No modificar bases históricas locales. La aplicación no está certificada como desplegada por ejecutar pruebas locales.
+
+## 0. Actualizar la aplicación que ya está desplegada
+
+No recrear App Service, Functions, Blob ni la base lab_lc. Conservar los ajustes de proxy, origen, sesiones y almacenamiento que ya funcionan. Esta entrega modifica el esquema; coordinar SQL y ambos paquetes durante una ventana de mantenimiento.
+
+1. Respaldar lab_lc y los PDF/versiones referenciados. Conservar los paquetes anteriores y una copia privada de ajustes. Probar restauración en base separada; no ejecutar 01_schema.sql sobre lab_lc existente.
+2. Pausar el acceso al portal y detener Functions para evitar peticiones de la versión anterior durante el cambio. Con el propietario, conectado expresamente a **lab_lc**, comprobar `SELECT current_database(); SELECT max(version) FROM migraciones_esquema;`. La versión requerida es 3.
+3. Ejecutar **sql/05_actualizacion_solicitudes.sql completo**. Es una transacción: convierte UUID de proyecto en código conservando empresa/autor, retira proyectos y miembros_proyecto, añade geografía, pesos, teléfono, empresa interna, OT y WAITING_ASSAYS. Conserva informes y sus claves Blob; no mueve PDFs. Rechaza cantidades fraccionarias/no finitas sin convertirlas. Tras éxito `max(version)=4` y once tablas. No ejecutar 01 ni demo.
+4. En el mismo servidor PostgreSQL verificar que **AppControlHH.public.proyecto** exista con `id_proyecto` y `nombre`, y que la cuenta elegida pueda leerlos. La conexión es independiente de lab_lc: pertenecer al mismo servidor no concede automáticamente permisos sobre otra base. Puede usarse una cuenta ya autorizada; se recomienda una cuenta de lectura, sin obligar a cambiar tu cuenta actual de laboratorio. Véase el ejemplo GRANT del README, ejecutado en AppControlHH por su propietario.
+5. En **Functions → Variables de entorno**, añadir **PROJECTS_DATABASE_URL**. Ejemplo sin credenciales reales:
+
+   ```text
+   postgresql+psycopg://LECTOR:CLAVE_URL_ENCODED@SERVIDOR.postgres.database.azure.com:5432/AppControlHH?sslmode=verify-full&sslrootcert=/home/site/wwwroot/certs/azure-postgresql-roots.pem
+   ```
+
+   Es un secreto del backend; no añadirlo a App Service ni VITE_. Reutilizar hostname, TLS y acceso de red vigentes si es el mismo servidor. Para otro servidor autorizar su conectividad/DNS desde Functions, sin abrir acceso público indiscriminado. La contraseña es de PostgreSQL, no una contraseña del portal. La URL requiere verify-full en producción, con el certificado público del paquete. [TLS PostgreSQL](https://learn.microsoft.com/en-us/azure/postgresql/security/security-tls-how-to-connect).
+6. Publicar **api** y **client** desde sus carpetas separadas en VS Code, con las exclusiones existentes y build remoto. No cambian el comando PM2 ni API_TARGET/FUNCTION_PROXY_KEY. Reiniciar Functions y portal tras guardar configuración y desplegar; los cambios de ajustes reinician Functions por defecto. [Configuración de Functions](https://learn.microsoft.com/en-us/azure/azure-functions/functions-how-to-use-azure-function-app-settings).
+7. En Administración → Empresas → Editar, marcar la empresa interna. Las otras son externas. Comprobar login y solicitudes de ambos tipos. Los usuarios CLIENT ahora consultan sus solicitudes, no las de todos los clientes de su proyecto anterior. TECH mantiene solo asignaciones propias. Los borradores ajenos siguen privados.
+8. Probar búsqueda interna por código/nombre y mayúsculas, envío sin ensayos, recepción parcial con sacos/peso, edición agregando ensayos, OT manual, aprobación/asignación y PDF. Coordenadas este/norte deben aceptar vacío. Al editar datos históricos completar distrito/provincia/departamento; no se inventaron valores en 05.
+
+No se añade tabla/servicio de catálogo ni se cambia Blob. PROJECTS_DATABASE_URL solo se utiliza al buscar/validar proyectos internos nuevos; si AppControlHH no responde, solicitudes existentes, login y documentos siguen operando. Para revertir esta migración, restaurar base y paquetes compatibles coordinadamente: el paquete v3 no funciona sobre esquema4. Las antiguas tablas de proyectos solo pueden recuperarse del respaldo. No restaurar un dump sobre lab_lc activo ni borrar PDF por la actualización.
+
+Local: mismos pasos SQL sobre **lab_lc_v3**, manteniendo el nombre; añadir PROJECTS_DATABASE_URL a local.settings.json sin sobrescribirlo. Reiniciar las dos ventanas Anaconda. No apuntar la configuración local a Azure accidentalmente.
 
 ## 1. Recursos y red antes de publicar
 
@@ -33,9 +56,10 @@ Desde el equipo de operación conectado por VPN, usando VS Code con cliente Post
 1. Conectado a `postgres`, ejecutar `sql/00_create_database.sql` fuera de transacción. Crea **lab_lc**. No usar el script local.
 2. Cambiar conexión a `lab_lc` y ejecutar `sql/01_schema.sql` y después `sql/02_catalog.sql`.
 3. **No ejecutar `03_demo.sql`** en producción.
-4. Crear rol LOGIN `lab_runtime` sin superusuario, CREATEDB ni CREATEROLE. Asignar contraseña con un diálogo seguro o `\password lab_runtime` en psql. Conservar al propietario del esquema como cuenta de instalación separada.
-5. Como propietario ejecutar `sql/04_runtime_permissions.sql` en `lab_lc`. El script usa la base de la conexión; verificarla antes con `SELECT current_database();`.
-6. Inicializar el primer administrador con `python manage.py bootstrap` desde `api` en el equipo autorizado, con variables privadas de producción. El comando pregunta correo, nombre y contraseña sin eco. Usar la cuenta runtime para esta operación. Las variables de entorno prevalecen sobre local.settings.json; abrir una ventana exclusiva y cerrarla al finalizar.
+4. Opcional y recomendado: crear rol LOGIN `lab_runtime` sin superusuario, CREATEDB ni CREATEROLE. Asignar contraseña con un diálogo seguro o `\password lab_runtime` en psql. Conservar al propietario del esquema como cuenta de instalación separada.
+5. Si se creó ese rol, como propietario ejecutar `sql/04_runtime_permissions.sql` en `lab_lc`. El script usa la base de la conexión; verificarla antes con `SELECT current_database();`.
+6. Configurar lectura de AppControlHH (sección 0, pasos 4–5).
+7. Inicializar el primer administrador con `python manage.py bootstrap` desde `api` en el equipo autorizado, con variables privadas de producción. El comando pregunta correo, nombre y contraseña sin eco. Usar la cuenta configurada para la aplicación; si elegiste conservar tu cuenta existente, no es obligatorio crear lab_runtime ni ejecutar 04. Las variables de entorno prevalecen sobre local.settings.json; abrir una ventana exclusiva y cerrarla al finalizar.
 
 En local el script de creación es `00_create_database_local.sql`, seguido de 01, 02 y opcionalmente 03. No se cambia tu `local.settings.json`. `manage.py migrate` acepta los nombres previstos y exige base vacía o esquema compatible; `demo` rechaza siempre `lab_lc`, incluso si APP_ENV se configura mal.
 
@@ -58,6 +82,7 @@ Plantillas sin secretos en `docs/settings/functions.example.json` y `docs/settin
 | APP_ENV | production |
 | APP_ORIGIN | https://HOST-PORTAL; origen exacto sin ruta/barra final |
 | DATABASE_URL | postgresql+psycopg://lab_runtime:CLAVE_URL_ENCODED@HOST.postgres.database.azure.com:5432/lab_lc?sslmode=verify-full&sslrootcert=/home/site/wwwroot/certs/azure-postgresql-roots.pem |
+| PROJECTS_DATABASE_URL | Conexión privada a AppControlHH; mismo formato TLS que DATABASE_URL, cuenta autorizada a leer public.proyecto(id_proyecto,nombre). |
 | STORAGE_MODE | azure |
 | STORAGE_ACCOUNT_URL | https://CUENTA-INFORMES.blob.core.windows.net |
 | STORAGE_CONTAINER | lab-informes |
@@ -102,7 +127,7 @@ VS Code comprime los archivos al publicar. `.gitignore` controla Git, **no susti
 
 - Revisar el paquete: sin configuraciones privadas, PDFs locales, claves o entornos Windows; con lockfiles, logo y CA públicos.
 - Probar /healthz, login, persistencia de sesión, cierre y revocación con ADMIN y cuenta creada desde la plataforma.
-- Probar nuevo proyecto y sus asignaciones; empresa ajena denegada; selección de proyectos editable.
+- Marcar empresa interna; probar búsqueda de catálogo de AppControlHH y solicitud externa sin selector. Verificar privacidad por autor y asignación del técnico, sin membresías de proyecto.
 - Probar CSRF/origen incorrectos, borradores exclusivos y técnicos compartiendo solicitud sin ampliar alcance.
 - Cargar PDF válido hasta 20 MiB, descargarlo con usuario autorizado y denegar otra empresa. Confirmar acceso anónimo al blob denegado y disponibilidad inmediata de la versión nueva.
 - Recargar una URL interna y comprobar proxy, cookies Secure/HttpOnly/SameSite y filtros.

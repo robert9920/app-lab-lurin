@@ -144,6 +144,14 @@
     "is_identity": "NO"
   },
   {
+    "table_name": "empresas",
+    "column_name": "es_interna",
+    "data_type": "boolean",
+    "is_nullable": "NO",
+    "column_default": "false",
+    "is_identity": "NO"
+  },
+  {
     "table_name": "ensayos_muestra",
     "column_name": "id",
     "data_type": "uuid",
@@ -320,22 +328,6 @@
     "is_identity": "NO"
   },
   {
-    "table_name": "miembros_proyecto",
-    "column_name": "proyecto_id",
-    "data_type": "uuid",
-    "is_nullable": "NO",
-    "column_default": null,
-    "is_identity": "NO"
-  },
-  {
-    "table_name": "miembros_proyecto",
-    "column_name": "usuario_id",
-    "data_type": "uuid",
-    "is_nullable": "NO",
-    "column_default": null,
-    "is_identity": "NO"
-  },
-  {
     "table_name": "migraciones_esquema",
     "column_name": "version",
     "data_type": "integer",
@@ -417,10 +409,10 @@
   },
   {
     "table_name": "muestras",
-    "column_name": "unidad",
-    "data_type": "text",
-    "is_nullable": "NO",
-    "column_default": "'kg'::text",
+    "column_name": "peso",
+    "data_type": "numeric",
+    "is_nullable": "YES",
+    "column_default": null,
     "is_identity": "NO"
   },
   {
@@ -465,6 +457,14 @@
   },
   {
     "table_name": "muestras",
+    "column_name": "peso_recibido",
+    "data_type": "numeric",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "muestras",
     "column_name": "condicion",
     "data_type": "text",
     "is_nullable": "NO",
@@ -493,54 +493,6 @@
     "data_type": "text",
     "is_nullable": "YES",
     "column_default": null,
-    "is_identity": "NO"
-  },
-  {
-    "table_name": "proyectos",
-    "column_name": "id",
-    "data_type": "uuid",
-    "is_nullable": "NO",
-    "column_default": "gen_random_uuid()",
-    "is_identity": "NO"
-  },
-  {
-    "table_name": "proyectos",
-    "column_name": "empresa_id",
-    "data_type": "uuid",
-    "is_nullable": "NO",
-    "column_default": null,
-    "is_identity": "NO"
-  },
-  {
-    "table_name": "proyectos",
-    "column_name": "codigo",
-    "data_type": "text",
-    "is_nullable": "NO",
-    "column_default": null,
-    "is_identity": "NO"
-  },
-  {
-    "table_name": "proyectos",
-    "column_name": "nombre",
-    "data_type": "text",
-    "is_nullable": "NO",
-    "column_default": null,
-    "is_identity": "NO"
-  },
-  {
-    "table_name": "proyectos",
-    "column_name": "ubicacion",
-    "data_type": "text",
-    "is_nullable": "NO",
-    "column_default": "''::text",
-    "is_identity": "NO"
-  },
-  {
-    "table_name": "proyectos",
-    "column_name": "activo",
-    "data_type": "boolean",
-    "is_nullable": "NO",
-    "column_default": "true",
     "is_identity": "NO"
   },
   {
@@ -602,6 +554,14 @@
   {
     "table_name": "solicitudes",
     "column_name": "proyecto_id",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "solicitudes",
+    "column_name": "empresa_id",
     "data_type": "uuid",
     "is_nullable": "NO",
     "column_default": null,
@@ -612,6 +572,54 @@
     "column_name": "creado_por",
     "data_type": "uuid",
     "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "solicitudes",
+    "column_name": "distrito",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "solicitudes",
+    "column_name": "provincia",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "solicitudes",
+    "column_name": "departamento",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "solicitudes",
+    "column_name": "coordenada_este",
+    "data_type": "numeric",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "solicitudes",
+    "column_name": "coordenada_norte",
+    "data_type": "numeric",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "solicitudes",
+    "column_name": "codigo_ot",
+    "data_type": "text",
+    "is_nullable": "YES",
     "column_default": null,
     "is_identity": "NO"
   },
@@ -692,6 +700,14 @@
     "column_name": "nombre",
     "data_type": "text",
     "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "usuarios",
+    "column_name": "num_telefono",
+    "data_type": "text",
+    "is_nullable": "YES",
     "column_default": null,
     "is_identity": "NO"
   },

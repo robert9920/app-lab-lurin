@@ -91,7 +91,7 @@ export function RequestList({ mode = "requests" }) {
         title={reception ? "Recepción" : "Solicitudes"}
         description={
           reception
-            ? "Solicitudes aprobadas con muestras pendientes u observadas. Registra únicamente las que llegaron."
+            ? "Solicitudes enviadas con muestras por atender u OT pendiente. Registra únicamente las que llegaron."
             : "Crea, revisa y sigue el avance de cada solicitud."
         }
       >
@@ -102,145 +102,156 @@ export function RequestList({ mode = "requests" }) {
         )}
       </PageHead>
       <ErrorBox>{error}</ErrorBox>
-      <div className="card form-card">
-        <div className="form-grid">
-          <Field label="Buscar solicitud">
-            <input
-              placeholder="Código, título o proyecto"
-              value={params.get("q") || ""}
-              onChange={(e) => filter("q", e.target.value)}
-            />
-          </Field>
-          <Field label="Proyecto">
-            <select
-              value={params.get("project") || ""}
-              onChange={(e) => filter("project", e.target.value)}
-            >
-              <option value="">Todos mis proyectos</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.code} · {p.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          {reception && (
-            <Field label="Estado de recepción">
-              <select
-                value={params.get("condition") || ""}
-                onChange={(e) => filter("condition", e.target.value)}
-              >
-                <option value="">Todas por atender</option>
-                <option value="NOT_RECEIVED">Con muestras sin recibir</option>
-                <option value="issues">
-                  Con muestras observadas, dañadas o insuficientes
-                </option>
-              </select>
-            </Field>
-          )}
-          {!reception && (
-            <Field label="Estado">
-              <select
-                value={params.get("status") || ""}
-                onChange={(e) => filter("status", e.target.value)}
-              >
-                <option value="">Todos los estados</option>
-                {[
-                  ...(!user.roles.some((r) =>
-                    ["ADMIN", "MANAGER", "TECH"].includes(r),
-                  )
-                    ? ["DRAFT"]
-                    : []),
-                  "SUBMITTED",
-                  "OBSERVED",
-                  "APPROVED",
-                  "REJECTED",
-                  "CLOSED",
-                ].map((s) => (
-                  <option key={s} value={s}>
-                    {labels[s]}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          )}
-        </div>
-      </div>
-      <section className="card section-gap">
-        {!data ? (
-          <p className="form-card">Cargando solicitudes…</p>
-        ) : data.items.length ? (
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Solicitud / proyecto</th>
-                  <th>Estado</th>
-                  <th>
-                    {reception ? "Muestras por atender" : "Avance de ensayos"}
-                  </th>
-                  <th>Fecha objetivo</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {data.items.map((r) => (
-                  <tr key={r.id}>
-                    <td>
-                      <Link
-                        className="table-link"
-                        to={detailUrl(
-                          r.id,
-                          reception ? "reception" : "summary",
-                          from,
-                        )}
-                      >
-                        <b>{r.code}</b>
-                        <span>{r.title}</span>
-                        <small>{r.project_code}</small>
-                      </Link>
-                    </td>
-                    <td>
-                      <Badge state={r.status} />
-                    </td>
-                    <td>
-                      {reception ? (
-                        r.pending_samples
-                      ) : (
-                        <>
-                          <span>
-                            {r.completed_count} de {r.task_count}
-                          </span>
-                          <progress
-                            max={r.task_count || 1}
-                            value={r.completed_count}
-                          />
-                        </>
-                      )}
-                    </td>
-                    <td>{fmtDate(r.target_date)}</td>
-                    <td>
-                      <Link
-                        className="btn"
-                        to={detailUrl(
-                          r.id,
-                          reception ? "reception" : "summary",
-                          from,
-                        )}
-                      >
-                        {reception ? "Registrar recepción" : "Abrir"}
-                      </Link>
-                    </td>
+      <div className="listing-layout">
+        <aside className="card form-card filters-panel">
+          <details open>
+            <summary>Filtros</summary>
+            <div className="form-grid">
+              <Field label="Buscar solicitud">
+                <input
+                  placeholder="Código, título o proyecto"
+                  value={params.get("q") || ""}
+                  onChange={(e) => filter("q", e.target.value)}
+                />
+              </Field>
+              <Field label="Proyecto">
+                <select
+                  value={params.get("project") || ""}
+                  onChange={(e) => filter("project", e.target.value)}
+                >
+                  <option value="">Todos los proyectos</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name !== p.code ? `${p.code} · ${p.name}` : p.code}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              {reception && (
+                <Field label="Estado de recepción">
+                  <select
+                    value={params.get("condition") || ""}
+                    onChange={(e) => filter("condition", e.target.value)}
+                  >
+                    <option value="">Todas por atender</option>
+                    <option value="NOT_RECEIVED">
+                      Con muestras sin recibir
+                    </option>
+                    <option value="NO_OT">Sin OT</option>
+                    <option value="issues">
+                      Con muestras observadas, dañadas o insuficientes
+                    </option>
+                  </select>
+                </Field>
+              )}
+              {!reception && (
+                <Field label="Estado">
+                  <select
+                    value={params.get("status") || ""}
+                    onChange={(e) => filter("status", e.target.value)}
+                  >
+                    <option value="">Todos los estados</option>
+                    {[
+                      ...(!user.roles.some((r) =>
+                        ["ADMIN", "MANAGER", "TECH"].includes(r),
+                      )
+                        ? ["DRAFT"]
+                        : []),
+                      "WAITING_ASSAYS",
+                      "SUBMITTED",
+                      "OBSERVED",
+                      "APPROVED",
+                      "REJECTED",
+                      "CLOSED",
+                    ].map((s) => (
+                      <option key={s} value={s}>
+                        {labels[s]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              )}
+            </div>
+          </details>
+        </aside>
+        <section className="card results-panel">
+          {!data ? (
+            <p className="form-card">Cargando solicitudes…</p>
+          ) : data.items.length ? (
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Solicitud / proyecto</th>
+                    <th>Estado</th>
+                    <th>
+                      {reception ? "Muestras por atender" : "Avance de ensayos"}
+                    </th>
+                    <th>Fecha objetivo</th>
+                    <th />
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <Empty>No hay solicitudes con estos filtros.</Empty>
-        )}
-        {data && <Pager data={data} params={params} setParams={setParams} />}
-      </section>
+                </thead>
+                <tbody>
+                  {data.items.map((r) => (
+                    <tr key={r.id}>
+                      <td>
+                        <Link
+                          className="table-link"
+                          to={detailUrl(
+                            r.id,
+                            reception ? "reception" : "summary",
+                            from,
+                          )}
+                        >
+                          <b>{r.code}</b>
+                          <span>{r.title}</span>
+                          <small>{r.project_code}</small>
+                        </Link>
+                      </td>
+                      <td>
+                        <Badge state={r.status} />
+                      </td>
+                      <td>
+                        {reception ? (
+                          r.pending_samples
+                        ) : (
+                          <>
+                            <span>
+                              {Number(r.task_count)
+                                ? `${r.completed_count} de ${r.task_count}`
+                                : "Ensayos por definir"}
+                            </span>
+                            <progress
+                              max={r.task_count || 1}
+                              value={r.completed_count}
+                            />
+                          </>
+                        )}
+                      </td>
+                      <td>{fmtDate(r.target_date)}</td>
+                      <td>
+                        <Link
+                          className="btn"
+                          to={detailUrl(
+                            r.id,
+                            reception ? "reception" : "summary",
+                            from,
+                          )}
+                        >
+                          {reception ? "Registrar recepción" : "Abrir"}
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <Empty>No hay solicitudes con estos filtros.</Empty>
+          )}
+          {data && <Pager data={data} params={params} setParams={setParams} />}
+        </section>
+      </div>
     </>
   );
 }

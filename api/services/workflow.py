@@ -1,18 +1,18 @@
 from database import execute, one, rows
 from errors import AppError
 from security import (
-    client_project,
+    client_request,
     is_staff,
     laboratory_access,
-    project_access,
     request_access,
     require_role,
     technical_only,
 )
 from services.common import audit, touch
+from services.projects import validate_code
 
 
-def allowed_actions(user, task, request_status):
+def allowed_actions(user, task, request_status, codigo_ot=None):
     if request_status != "APPROVED" or task["state"] in ("COMPLETED", "CANCELLED"):
         return []
     manager = "MANAGER" in user["roles"]
@@ -22,12 +22,18 @@ def allowed_actions(user, task, request_status):
     state, assigned = task["state"], task["technician_id"] is not None
     actions = []
     if manager:
-        if state == "PENDING":
+        if state == "PENDING" and codigo_ot:
             actions.append("assign")
         actions.append("cancel")
-        if state == "OBSERVED" and assigned and task["started_at"] and task["condition"] == "OK":
+        if (
+            state == "OBSERVED"
+            and assigned
+            and task["started_at"]
+            and task["condition"] == "OK"
+            and codigo_ot
+        ):
             actions.append("resume")
-    if state == "PENDING" and assigned and task["condition"] == "OK":
+    if state == "PENDING" and assigned and task["condition"] == "OK" and codigo_ot:
         actions.append("start")
     if state == "RUNNING" and assigned and task["started_at"]:
         actions.append("observe")
@@ -91,7 +97,8 @@ def readable_history(data, user):
                     f"{s['client_code']}: {states.get(after.get('condition'), 'Recepción actualizada')}"
                 )
                 for key, label in (
-                    ("received_quantity", "Cantidad recibida"),
+                    ("received_quantity", "Sacos recibidos"),
+                    ("received_weight", "Peso recibido (kg)"),
                     ("codigo_recepcion", "Recepción"),
                     ("codigo_laboratorio", "Código laboratorio"),
                     ("reception_notes", "Observación"),
@@ -112,10 +119,19 @@ def require_approved(r):
 
 def detail(db, user, rid):
     r = request_access(db, user, rid)
-    r["project"] = one(
-        db,
-        "SELECT p.*,o.nombre organization_name FROM proyectos p\n        JOIN empresas o ON o.id=p.empresa_id WHERE p.id=:id",
-        id=r["project_id"],
+    organization = one(db, "SELECT nombre,es_interna FROM empresas WHERE id=:id", id=r["organization_id"])
+    r["is_internal"] = organization["is_internal"]
+    r["project"] = {
+        "id": r["project_id"],
+        "code": r["project_id"],
+        "name": r["project_id"],
+        "organization_name": organization["name"],
+    }
+    r["can_edit"] = client_request(user, r) and r["status"] in (
+        "DRAFT",
+        "WAITING_ASSAYS",
+        "SUBMITTED",
+        "OBSERVED",
     )
     r["samples"] = rows(
         db,
@@ -127,7 +143,7 @@ def detail(db, user, rid):
         "SELECT a.*,s.codigo_cliente sample_code,s.condicion,c.nombre,c.codigo assay_code,u.nombre technician_name\n        FROM ensayos_muestra a JOIN muestras s ON s.id=a.muestra_id JOIN catalogo_ensayos c ON c.id=a.ensayo_id\n        LEFT JOIN usuarios u ON u.id=a.tecnico_id WHERE s.solicitud_id=:id ORDER BY s.codigo_cliente,c.nombre",
         id=rid,
     )
-    client_view = client_project(db, user, r["project_id"])
+    client_view = client_request(user, r)
     owned = {t["sample_id"] for t in r["tasks"] if t["technician_id"] == user["id"]}
     for s in r["samples"]:
         s["can_receive"] = "MANAGER" in user["roles"] or ("TECH" in user["roles"] and s["id"] in owned)
@@ -150,7 +166,7 @@ def detail(db, user, rid):
             s["assay_ids"] = [t["assay_id"] for t in r["tasks"] if t["sample_id"] == s["id"]]
     for t in r["tasks"]:
         t["assigned"] = t["technician_id"] is not None
-        t["allowed_actions"] = allowed_actions(user, t, r["status"])
+        t["allowed_actions"] = allowed_actions(user, t, r["status"], r["codigo_ot"])
     r["activity"] = readable_history(r, user)
     # Internal technical notes are not part of the client projection.
     for t in r["tasks"]:
@@ -161,13 +177,13 @@ def detail(db, user, rid):
 
 def save_samples(db, rid, samples):
     for s in samples:
-        p = s.model_dump(exclude={"assay_ids"})
+        p = s.model_dump(exclude={"assay_ids", "id"})
         for aid in s.assay_ids:
             if not one(db, "SELECT id FROM catalogo_ensayos WHERE id=:id AND activo", id=aid):
                 raise AppError(400, "Selecciona ensayos activos del catálogo.")
         sample = one(
             db,
-            "INSERT INTO muestras(solicitud_id,codigo_cliente,calicata_sondaje,material,profundidad_inicial,profundidad_final,cantidad,unidad,observaciones)\n            VALUES(:rid,:client_code,:borehole,:material,:depth_from,:depth_to,:quantity,:unit,:notes) RETURNING id",
+            "INSERT INTO muestras(solicitud_id,codigo_cliente,calicata_sondaje,material,profundidad_inicial,profundidad_final,cantidad,peso,observaciones)\n            VALUES(:rid,:client_code,:borehole,:material,:depth_from,:depth_to,:quantity,:weight,:notes) RETURNING id",
             rid=rid,
             **p,
         )
@@ -180,51 +196,188 @@ def save_samples(db, rid, samples):
             )
 
 
+def organization_for(db, user):
+    org = one(db, "SELECT * FROM empresas WHERE id=:id AND activo", id=user["organization_id"])
+    if not org:
+        raise AppError(400, "Asigna una empresa habilitada al solicitante.")
+    return org
+
+
 def create_request(db, user, data):
     require_role(user, "CLIENT")
-    p = project_access(db, {**user, "roles": ["CLIENT"]}, data.project_id)
-    if not p["active"]:
-        raise AppError(409, "Proyecto inactivo.")
+    org = organization_for(db, user)
+    code = validate_code(data.project_id) if org["is_internal"] else "EXTERNO"
+    if any(s.id is not None for s in data.samples):
+        raise AppError(400, "Una muestra nueva no debe incluir identificador.")
     r = one(
         db,
-        "INSERT INTO solicitudes(proyecto_id,creado_por,titulo,observaciones,fecha_objetivo)\n        VALUES(:pid,:uid,:title,:notes,:date) RETURNING *",
-        pid=data.project_id,
+        "INSERT INTO solicitudes(proyecto_id,empresa_id,creado_por,titulo,observaciones,fecha_objetivo,"
+        "distrito,provincia,departamento,coordenada_este,coordenada_norte) "
+        "VALUES(:pid,:org,:uid,:title,:notes,:date,:district,:province,:department,:easting,:northing) RETURNING *",
+        pid=code,
+        org=org["id"],
         uid=user["id"],
         title=data.title,
         notes=data.notes,
         date=data.target_date,
+        district=data.district,
+        province=data.province,
+        department=data.department,
+        easting=data.easting,
+        northing=data.northing,
     )
     save_samples(db, r["id"], data.samples)
     audit(db, user, "Solicitud creada", r["id"], internal=False)
     return {"id": r["id"]}
 
 
+def missing_assays(db, rid):
+    return one(
+        db,
+        "SELECT count(*) n FROM muestras s WHERE s.solicitud_id=:id AND NOT EXISTS(SELECT 1 FROM ensayos_muestra a WHERE a.muestra_id=s.id)",
+        id=rid,
+    )["n"]
+
+
 def edit_request(db, user, rid, data):
     require_role(user, "CLIENT")
     r = request_access(db, user, rid, data.version)
-    if r["status"] not in ("DRAFT", "OBSERVED"):
-        raise AppError(409, "Solo se pueden editar borradores o solicitudes observadas.")
-    if data.project_id != r["project_id"]:
-        raise AppError(400, "No se puede cambiar de proyecto.")
-    execute(db, "DELETE FROM muestras WHERE solicitud_id=:id", id=rid)
-    save_samples(db, rid, data.samples)
+    if not client_request(user, r) or r["status"] not in ("DRAFT", "WAITING_ASSAYS", "SUBMITTED", "OBSERVED"):
+        raise AppError(409, "Solo el autor puede editar una solicitud antes de su aprobación.")
+    org = one(db, "SELECT * FROM empresas WHERE id=:id", id=r["organization_id"])
+    code = data.project_id if org["is_internal"] else "EXTERNO"
+    # Existing historical codes are retained, including companies reclassified later.
+    if r["status"] != "DRAFT":
+        if data.project_id not in (None, r["project_id"]):
+            raise AppError(400, "No se puede cambiar de proyecto después del envío.")
+        code = r["project_id"]
+    elif code != r["project_id"] and org["is_internal"]:
+        validate_code(code)
+    existing = {x["id"]: x for x in rows(db, "SELECT * FROM muestras WHERE solicitud_id=:id", id=rid)}
+    ids = [s.id for s in data.samples if s.id]
+    if len(ids) != len(set(ids)) or not set(ids).issubset(existing):
+        raise AppError(400, "Identificadores de muestras inválidos o repetidos.")
+    codes = [s.client_code for s in data.samples]
+    if len(codes) != len(set(codes)):
+        raise AppError(400, "Muestra: el código no puede repetirse dentro de la solicitud.")
+    declared = (
+        "client_code",
+        "borehole",
+        "material",
+        "depth_from",
+        "depth_to",
+        "quantity",
+        "weight",
+        "notes",
+    )
+    changes = []
+    for sample in data.samples:
+        if not sample.id:
+            continue
+        old = existing[sample.id]
+        values = sample.model_dump(exclude={"id", "assay_ids"})
+        if old["received_at"] and any(old[k] != values[k] for k in declared):
+            raise AppError(
+                409, "Los datos de una muestra recibida están protegidos. Puedes completar sus ensayos."
+            )
+        tasks = rows(db, "SELECT * FROM ensayos_muestra WHERE muestra_id=:id", id=sample.id)
+        for t in tasks:
+            if t["assay_id"] not in sample.assay_ids and (
+                t["technician_id"] or t["started_at"] or t["state"] != "PENDING"
+            ):
+                raise AppError(409, "No se puede retirar un ensayo asignado o iniciado.")
+        changes.append(
+            {
+                "sample_id": sample.id,
+                "client_code": sample.client_code,
+                "before": {k: old[k] for k in declared},
+                "after": values,
+                "assay_ids": sample.assay_ids,
+            }
+        )
+    for sid in set(existing) - set(ids):
+        if existing[sid]["received_at"] or one(
+            db,
+            "SELECT 1 FROM ensayos_muestra WHERE muestra_id=:id AND (tecnico_id IS NOT NULL OR iniciado_en IS NOT NULL OR estado_ensayo<>'PENDING')",
+            id=sid,
+        ):
+            raise AppError(409, "No se puede eliminar una muestra recibida o con trabajo asignado.")
+        execute(db, "DELETE FROM muestras WHERE id=:id", id=sid)
+    # Permit code swaps without violating the per-request unique constraint.
+    for sample in data.samples:
+        if sample.id and existing[sample.id]["client_code"] != sample.client_code:
+            execute(
+                db,
+                "UPDATE muestras SET codigo_cliente=:c WHERE id=:id",
+                c="TEMP-" + str(sample.id),
+                id=sample.id,
+            )
+    for sample in data.samples:
+        if not sample.id:
+            save_samples(db, rid, [sample])
+            continue
+        execute(
+            db,
+            "UPDATE muestras SET codigo_cliente=:client_code,calicata_sondaje=:borehole,material=:material,"
+            "profundidad_inicial=:depth_from,profundidad_final=:depth_to,cantidad=:quantity,peso=:weight,observaciones=:notes WHERE id=:sid",
+            sid=sample.id,
+            **sample.model_dump(exclude={"id", "assay_ids"}),
+        )
+        current = {
+            t["assay_id"]
+            for t in rows(db, "SELECT ensayo_id FROM ensayos_muestra WHERE muestra_id=:id", id=sample.id)
+        }
+        for aid in current - set(sample.assay_ids):
+            execute(
+                db,
+                "DELETE FROM ensayos_muestra WHERE muestra_id=:sid AND ensayo_id=:aid",
+                sid=sample.id,
+                aid=aid,
+            )
+        for aid in set(sample.assay_ids) - current:
+            if not one(db, "SELECT 1 FROM catalogo_ensayos WHERE id=:id AND activo", id=aid):
+                raise AppError(400, "Selecciona ensayos activos del catálogo.")
+            execute(
+                db,
+                "INSERT INTO ensayos_muestra(muestra_id,ensayo_id) VALUES(:sid,:aid)",
+                sid=sample.id,
+                aid=aid,
+            )
+    state = r["status"]
+    if state in ("WAITING_ASSAYS", "SUBMITTED"):
+        state = "WAITING_ASSAYS" if missing_assays(db, rid) else "SUBMITTED"
     execute(
         db,
-        "UPDATE solicitudes SET titulo=:title,observaciones=:notes,fecha_objetivo=:date WHERE id=:id",
+        "UPDATE solicitudes SET proyecto_id=:pid,titulo=:title,observaciones=:notes,fecha_objetivo=:date,"
+        "distrito=:district,provincia=:province,departamento=:department,coordenada_este=:easting,coordenada_norte=:northing,estado_solicitud=:state WHERE id=:id",
+        id=rid,
+        pid=code,
         title=data.title,
         notes=data.notes,
         date=data.target_date,
-        id=rid,
+        district=data.district,
+        province=data.province,
+        department=data.department,
+        easting=data.easting,
+        northing=data.northing,
+        state=state,
     )
     touch(db, rid)
-    audit(db, user, "Solicitud corregida", rid, internal=False)
+    audit(
+        db,
+        user,
+        "Solicitud actualizada; datos y ensayos declarados",
+        rid,
+        {"sample_edits": changes, "from": r["status"], "to": state},
+        internal=False,
+    )
     return {"ok": True}
 
 
 def action(db, user, rid, data):
     r = request_access(db, user, rid, data.version)
     transitions = {
-        "submit": (("DRAFT", "OBSERVED"), "SUBMITTED"),
+        "submit": (("DRAFT", "OBSERVED", "WAITING_ASSAYS"), "SUBMITTED"),
         "approve": (("SUBMITTED",), "APPROVED"),
         "observe": (("SUBMITTED",), "OBSERVED"),
         "reject": (("SUBMITTED",), "REJECTED"),
@@ -235,10 +388,16 @@ def action(db, user, rid, data):
         require_role(user, "MANAGER")
     else:
         require_role(user, "CLIENT")
+        if not client_request(user, r):
+            raise AppError(404, "Solicitud no encontrada.")
+        if missing_assays(db, rid):
+            new = "WAITING_ASSAYS"
     if r["status"] not in old:
         raise AppError(409, "Esta transición no corresponde al estado actual.")
     if data.action in ("observe", "reject") and not data.reason:
         raise AppError(400, "Indica el motivo.")
+    if data.action == "approve" and missing_assays(db, rid):
+        raise AppError(409, "Define los ensayos de todas las muestras antes de aprobar.")
     if data.action == "close":
         pending = one(
             db,
@@ -269,7 +428,11 @@ def action(db, user, rid, data):
 
 def reception(db, user, rid, data):
     require_role(user, "MANAGER", "TECH")
-    require_approved(laboratory_access(db, user, rid, data.version))
+    request = laboratory_access(db, user, rid, data.version)
+    if request["status"] not in ("WAITING_ASSAYS", "SUBMITTED", "OBSERVED", "APPROVED"):
+        raise AppError(409, "Envía la solicitud antes de registrar su recepción.")
+    if "MANAGER" not in user["roles"]:
+        require_approved(request)
     if len({s.sample_id for s in data.samples}) != len(data.samples):
         raise AppError(400, "Muestra duplicada.")
     changes = []
@@ -296,7 +459,7 @@ def reception(db, user, rid, data):
             raise AppError(409, "No puedes invalidar material con ensayos en ejecución o completados.")
         execute(
             db,
-            "UPDATE muestras SET recibido_en=:at,recibido_por=:uid,transporte=:transport,\n            cantidad_recibida=:received_quantity,condicion=:condition,observaciones_recepcion=:reception_notes,\n            codigo_recepcion=:codigo_recepcion,codigo_laboratorio=:codigo_laboratorio WHERE id=:sample_id",
+            "UPDATE muestras SET recibido_en=:at,recibido_por=:uid,transporte=:transport,\n            cantidad_recibida=:received_quantity,peso_recibido=:received_weight,condicion=:condition,observaciones_recepcion=:reception_notes,\n            codigo_recepcion=:codigo_recepcion,codigo_laboratorio=:codigo_laboratorio WHERE id=:sample_id",
             at=data.received_at,
             uid=user["id"],
             transport=data.transport,
@@ -310,6 +473,7 @@ def reception(db, user, rid, data):
                     for k in (
                         "received_at",
                         "received_quantity",
+                        "received_weight",
                         "condition",
                         "transport",
                         "reception_notes",
@@ -336,7 +500,8 @@ def reception(db, user, rid, data):
 
 def update_tasks(db, user, rid, data):
     require_role(user, "MANAGER", "TECH")
-    require_approved(laboratory_access(db, user, rid, data.version))
+    request = laboratory_access(db, user, rid, data.version)
+    require_approved(request)
     manager = "MANAGER" in user["roles"]
     if len(set(data.task_ids)) != len(data.task_ids):
         raise AppError(400, "Ensayo duplicado.")
@@ -361,7 +526,7 @@ def update_tasks(db, user, rid, data):
             raise AppError(404, "Ensayo no encontrado.")
         if not manager and task["technician_id"] != user["id"]:
             raise AppError(403, "Solo puedes modificar ensayos asignados a ti.")
-        if data.action not in allowed_actions(user, task, "APPROVED"):
+        if data.action not in allowed_actions(user, task, "APPROVED", request["codigo_ot"]):
             raise AppError(
                 409, "La acción requiere un estado, responsable y material compatibles. Recarga la lista."
             )
@@ -408,3 +573,24 @@ def update_tasks(db, user, rid, data):
         )
     touch(db, rid)
     return {"ok": True}
+
+
+def work_order(db, user, rid, data):
+    require_role(user, "MANAGER")
+    r = laboratory_access(db, user, rid, data.version)
+    if r["status"] not in ("WAITING_ASSAYS", "SUBMITTED", "OBSERVED", "APPROVED"):
+        raise AppError(409, "La solicitud debe estar enviada y abierta.")
+    if not one(db, "SELECT 1 FROM muestras WHERE solicitud_id=:id AND recibido_en IS NOT NULL", id=rid):
+        raise AppError(409, "Recibe al menos una muestra antes de generar la OT.")
+    if r["codigo_ot"] and not data.reason:
+        raise AppError(400, "Corregir una OT requiere motivo.")
+    execute(db, "UPDATE solicitudes SET codigo_ot=:code WHERE id=:id", code=data.codigo_ot, id=rid)
+    touch(db, rid)
+    audit(
+        db,
+        user,
+        "OT registrada: " + data.codigo_ot + (" · " + data.reason if data.reason else ""),
+        rid,
+        {"previous_ot": r["codigo_ot"], "codigo_ot": data.codigo_ot, "reason": data.reason},
+        internal=False,
+    )

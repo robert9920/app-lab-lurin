@@ -15,7 +15,6 @@ import {
   Settings,
   LogOut,
   Menu,
-  ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "./context/AuthContext";
 import Login from "./pages/Login";
@@ -57,46 +56,48 @@ export default function App() {
   ];
   return (
     <div className="app-shell">
-      <aside className={`sidebar ${open ? "open" : ""}`}>
-        <a href="/" className="brand">
-          <img src="/logo.png" alt="Lara Consulting" />
-          <span>LABORATORIO LURÍN</span>
-        </a>
-        <div className="nav-caption">ESPACIO DE TRABAJO</div>
-        <nav>
-          {navigation.map(([to, title, Icon]) => (
-            <NavLink
-              className={({ isActive }) =>
-                (
-                  location.pathname.startsWith("/requests/")
-                    ? (
-                        new URLSearchParams(location.search).get("from") ||
-                        "/requests"
-                      ).split("?")[0] === to
-                    : isActive
-                )
-                  ? "active"
-                  : ""
-              }
-              end={to === "/"}
-              key={to}
-              to={to}
-              onClick={() => setOpen(false)}
-            >
-              <Icon size={19} />
-              {title}
-            </NavLink>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="secure-note">
-            <ShieldCheck size={18} />
-            <span>
-              Información protegida
-              <br />
-              <small>Acceso según tus permisos</small>
-            </span>
-          </div>
+      <div className="workspace">
+        <header className="portal-header">
+          <NavLink to="/" className="brand">
+            <img src="/logo.png" alt="Lara Consulting" />
+            <span>LABORATORIO LURÍN</span>
+          </NavLink>
+          <button
+            className="mobile-menu icon-btn"
+            onClick={() => setOpen(!open)}
+            aria-label="Abrir menú"
+            aria-expanded={open}
+          >
+            <Menu />
+          </button>
+          <nav
+            className={`workspace-nav ${open ? "open" : ""}`}
+            aria-label="Espacio de trabajo"
+          >
+            {navigation.map(([to, title, Icon]) => (
+              <NavLink
+                end={to === "/"}
+                key={to}
+                to={to}
+                onClick={() => setOpen(false)}
+                className={({ isActive }) =>
+                  (
+                    location.pathname.startsWith("/requests/")
+                      ? (
+                          new URLSearchParams(location.search).get("from") ||
+                          "/requests"
+                        ).split("?")[0] === to
+                      : isActive
+                  )
+                    ? "active"
+                    : ""
+                }
+              >
+                <Icon size={18} />
+                {title}
+              </NavLink>
+            ))}
+          </nav>
           <div className="user-block">
             <div className="avatar">
               {user.name
@@ -112,28 +113,11 @@ export default function App() {
             <button
               onClick={logout}
               aria-label="Cerrar sesión"
+              title="Cerrar sesión"
               className="icon-btn"
             >
-              <LogOut size={17} />
+              <LogOut size={18} />
             </button>
-          </div>
-        </div>
-      </aside>
-      <div className="workspace">
-        <header className="topbar">
-          <button
-            className="mobile-menu icon-btn"
-            onClick={() => setOpen(!open)}
-            aria-label="Abrir menú"
-          >
-            <Menu />
-          </button>
-          <span>
-            Gestión de ensayos <span className="top-divider">/</span>{" "}
-            <b>Laboratorio</b>
-          </span>
-          <div>
-            <span className="status-dot" /> Portal conectado
           </div>
         </header>
         <main>

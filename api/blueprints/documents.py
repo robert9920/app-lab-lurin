@@ -75,13 +75,13 @@ def reports(db, req):
     u = session(db, req)
     where = (
         SCOPE
-        + " AND (:project='' OR r.proyecto_id::text=:project) AND (:request='' OR r.id::text=:request) AND (r.codigo ILIKE :q OR p.codigo ILIKE :q OR r.titulo ILIKE :q)"
+        + " AND (:project='' OR r.proyecto_id::text=:project) AND (:request='' OR r.id::text=:request) AND (r.codigo ILIKE :q OR r.proyecto_id ILIKE :q OR r.titulo ILIKE :q)"
     )
     return page_result(
         db,
         req,
-        "SELECT d.id,d.solicitud_id,d.version,d.nombre,d.tamano_bytes,d.creado_en,r.codigo request_code,p.codigo project_code,u.nombre uploaded_by_name",
-        "FROM informes d JOIN solicitudes r ON r.id=d.solicitud_id JOIN proyectos p ON p.id=r.proyecto_id JOIN usuarios u ON u.id=d.subido_por",
+        "SELECT d.id,d.solicitud_id,d.version,d.nombre,d.tamano_bytes,d.creado_en,r.codigo request_code,r.proyecto_id project_code,u.nombre uploaded_by_name",
+        "FROM informes d JOIN solicitudes r ON r.id=d.solicitud_id JOIN usuarios u ON u.id=d.subido_por",
         where,
         {
             **scope_params(u),

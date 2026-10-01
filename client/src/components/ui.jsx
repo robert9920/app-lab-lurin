@@ -2,6 +2,7 @@ import { X, LoaderCircle, Inbox, ArrowUpRight } from "lucide-react";
 import { cloneElement, isValidElement, useId } from "react";
 export const labels = {
   DRAFT: "Borrador",
+  WAITING_ASSAYS: "Pendiente de ensayos",
   SUBMITTED: "En revisión",
   OBSERVED: "Observado",
   APPROVED: "Aprobado",

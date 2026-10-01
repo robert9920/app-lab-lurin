@@ -10,18 +10,10 @@ INSERT INTO usuarios(id,empresa_id,nombre,correo,roles,hash_contrasena) VALUES
 ('20000000-0000-0000-0000-000000000003',NULL,'Lucía Torres','tecnico@example.com','{TECH}','!NOT_INITIALIZED'),
 ('20000000-0000-0000-0000-000000000004','10000000-0000-0000-0000-000000000001','Diego · cliente interno','cliente@example.com','{CLIENT}','!NOT_INITIALIZED'),
 ('20000000-0000-0000-0000-000000000005','10000000-0000-0000-0000-000000000002','María · cliente externo','externo@example.com','{CLIENT}','!NOT_INITIALIZED') ON CONFLICT DO NOTHING;
-INSERT INTO proyectos(id,empresa_id,codigo,nombre,ubicacion) VALUES
-('30000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','DEMO-001','Recrecimiento del depósito de relaves','Lurín, Lima'),
-('30000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000001','DEMO-002','Planta de relaves filtrados','Moquegua'),
-('30000000-0000-0000-0000-000000000003','10000000-0000-0000-0000-000000000002','DEMO-003','Caracterización geotécnica Horizonte','Arequipa') ON CONFLICT DO NOTHING;
-INSERT INTO miembros_proyecto(usuario_id,proyecto_id) VALUES
-('20000000-0000-0000-0000-000000000004','30000000-0000-0000-0000-000000000001'),
-('20000000-0000-0000-0000-000000000004','30000000-0000-0000-0000-000000000002'),
-('20000000-0000-0000-0000-000000000005','30000000-0000-0000-0000-000000000003') ON CONFLICT DO NOTHING;
-INSERT INTO solicitudes(id,codigo,proyecto_id,creado_por,titulo,estado_solicitud,fecha_objetivo,observaciones) VALUES
-('40000000-0000-0000-0000-000000000001','SOL-DEMO-001','30000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000004','Caracterización de suelos del dique norte','APPROVED',current_date+14,'Datos ficticios para practicar recepción parcial.'),
-('40000000-0000-0000-0000-000000000002','SOL-DEMO-002','30000000-0000-0000-0000-000000000002','20000000-0000-0000-0000-000000000004','Evaluación de relaves filtrados','SUBMITTED',current_date+21,''),
-('40000000-0000-0000-0000-000000000003','SOL-DEMO-003','30000000-0000-0000-0000-000000000003','20000000-0000-0000-0000-000000000005','Ensayos de resistencia Horizonte','DRAFT',current_date+30,'Este registro es exclusivo del cliente externo.') ON CONFLICT DO NOTHING;
+INSERT INTO solicitudes(id,codigo,proyecto_id,empresa_id,creado_por,titulo,estado_solicitud,fecha_objetivo,observaciones) VALUES
+('40000000-0000-0000-0000-000000000001','SOL-DEMO-001','DEMO-001','10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000004','Caracterización de suelos del dique norte','APPROVED',current_date+14,'Datos ficticios para practicar recepción parcial.'),
+('40000000-0000-0000-0000-000000000002','SOL-DEMO-002','DEMO-002','10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000004','Evaluación de relaves filtrados','SUBMITTED',current_date+21,''),
+('40000000-0000-0000-0000-000000000003','SOL-DEMO-003','EXTERNO','10000000-0000-0000-0000-000000000002','20000000-0000-0000-0000-000000000005','Ensayos de resistencia Horizonte','DRAFT',current_date+30,'Este registro es exclusivo del cliente externo.') ON CONFLICT DO NOTHING;
 INSERT INTO muestras(id,solicitud_id,codigo_cliente,calicata_sondaje,profundidad_inicial,profundidad_final,cantidad,observaciones) VALUES
 ('50000000-0000-0000-0000-000000000001','40000000-0000-0000-0000-000000000001','M-01','DH-01',1,2.5,15,'Material granular'),
 ('50000000-0000-0000-0000-000000000002','40000000-0000-0000-0000-000000000001','M-02','DH-02',3,4.5,12,'Arribo adicional pendiente'),
@@ -53,4 +45,7 @@ VALUES('50000000-0000-0000-0000-000000000009','40000000-0000-0000-0000-000000000
 INSERT INTO ensayos_muestra(muestra_id,ensayo_id,tecnico_id,estado_ensayo,fin_previsto,observaciones,iniciado_en)
 SELECT '50000000-0000-0000-0000-000000000009',id,'20000000-0000-0000-0000-000000000003',
  'OBSERVED',current_date+2,'Esperando material adicional',now()-interval '1 day' FROM catalogo_ensayos WHERE codigo='CU4' ON CONFLICT DO NOTHING;
+UPDATE empresas SET es_interna=true WHERE id='10000000-0000-0000-0000-000000000001' AND NOT EXISTS(SELECT 1 FROM empresas WHERE es_interna);
+UPDATE solicitudes SET distrito='Lurín',provincia='Lima',departamento='Lima' WHERE codigo LIKE 'SOL-DEMO-%';
+UPDATE solicitudes SET codigo_ot='OT-DEMO-001' WHERE codigo='SOL-DEMO-001' AND codigo_ot IS NULL;
 COMMIT;

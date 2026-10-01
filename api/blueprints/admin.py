@@ -5,7 +5,7 @@ from errors import AppError
 from http_helpers import body, endpoint, uid
 from security import hasher, require_role, session
 from services.common import audit
-from validation import Catalog, Organization, Password, Project, UserCreate, UserEdit
+from validation import Catalog, Organization, OrganizationEdit, Password, UserCreate, UserEdit
 
 bp = func.Blueprint()
 
@@ -16,14 +16,15 @@ def admin(db, req):
     return u
 
 
-def members(db, user_id, project_ids, organization_id):
-    for pid in set(project_ids):
-        p = one(db, "SELECT * FROM proyectos WHERE id=:p", p=pid)
-        if not p or p["organization_id"] != organization_id:
-            raise AppError(400, "Los proyectos deben pertenecer a la empresa del usuario.")
-    execute(db, "DELETE FROM miembros_proyecto WHERE usuario_id=:u", u=user_id)
-    for pid in set(project_ids):
-        execute(db, "INSERT INTO miembros_proyecto(usuario_id,proyecto_id) VALUES(:u,:p)", u=user_id, p=pid)
+def administrative_lock(db):
+    execute(db, "SELECT pg_advisory_xact_lock(481701)")
+
+
+def valid_company(db, organization, roles):
+    if "CLIENT" in roles and not organization:
+        raise AppError(400, "Asigna una empresa al cliente.")
+    if organization and not one(db, "SELECT 1 FROM empresas WHERE id=:id AND activo", id=organization):
+        raise AppError(400, "Empresa: selecciona una empresa habilitada.")
 
 
 @bp.route(route="management/data", methods=["GET"])
@@ -32,72 +33,78 @@ def admin_data(db, req):
     admin(db, req)
     return {
         "organizations": rows(db, "SELECT * FROM empresas ORDER BY nombre"),
-        "projects": rows(db, "SELECT * FROM proyectos ORDER BY codigo"),
         "users": rows(
             db,
-            "SELECT u.id,u.nombre,u.correo,u.roles,u.activo,u.empresa_id,ARRAY(SELECT proyecto_id FROM miembros_proyecto WHERE usuario_id=u.id) project_ids\n                FROM usuarios u ORDER BY u.nombre",
+            "SELECT u.id,u.nombre,u.correo,u.num_telefono,u.roles,u.activo,u.empresa_id\n                FROM usuarios u ORDER BY u.nombre",
         ),
         "catalog": rows(db, "SELECT * FROM catalogo_ensayos ORDER BY codigo"),
     }
+
+
+def set_internal(db, oid, p):
+    if p.is_internal and not p.active:
+        raise AppError(400, "La empresa interna debe estar habilitada.")
+    if p.is_internal:
+        execute(db, "UPDATE empresas SET es_interna=false WHERE es_interna AND id<>:id", id=oid)
+    execute(db, "UPDATE empresas SET es_interna=:internal WHERE id=:id", internal=p.is_internal, id=oid)
 
 
 @bp.route(route="management/organizations", methods=["POST"])
 @endpoint
 def admin_organizations(db, req):
     u, p = admin(db, req), body(req, Organization)
+    administrative_lock(db)
     r = one(
         db,
-        "INSERT INTO empresas(nombre,identificacion_tributaria) VALUES(:n,:t) RETURNING *",
+        "INSERT INTO empresas(nombre,identificacion_tributaria,activo) VALUES(:n,:t,:a) RETURNING *",
         n=p.name,
         t=p.tax_id or None,
+        a=p.active,
     )
-    audit(db, u, "ORGANIZATION_CREATED", detail={"id": r["id"]})
-    return r
+    set_internal(db, r["id"], p)
+    audit(db, u, "Empresa creada", detail={"id": r["id"], "is_internal": p.is_internal})
+    return one(db, "SELECT * FROM empresas WHERE id=:id", id=r["id"])
 
 
-@bp.route(route="management/projects", methods=["POST"])
+@bp.route(route="management/organizations/{id}", methods=["PUT"])
 @endpoint
-def admin_projects(db, req):
-    u, p = admin(db, req), body(req, Project)
-    execute(db, "SELECT pg_advisory_xact_lock(481701)")
-    r = one(
+def edit_organization(db, req):
+    u, p = admin(db, req), body(req, OrganizationEdit)
+    administrative_lock(db)
+    oid = uid(req.route_params["id"])
+    old = one(db, "SELECT * FROM empresas WHERE id=:id FOR UPDATE", id=oid)
+    if not old:
+        raise AppError(404, "Empresa no encontrada.")
+    set_internal(db, oid, p)
+    execute(
         db,
-        "INSERT INTO proyectos(empresa_id,codigo,nombre,ubicacion)\n        VALUES(:organization_id,:code,:name,:location) RETURNING *",
-        **p.model_dump(),
+        "UPDATE empresas SET nombre=:n,identificacion_tributaria=:t,activo=:a WHERE id=:id",
+        n=p.name,
+        t=p.tax_id or None,
+        a=p.active,
+        id=oid,
     )
-    assigned = rows(
-        db,
-        "INSERT INTO miembros_proyecto(proyecto_id,usuario_id) SELECT :p,id FROM usuarios WHERE empresa_id=:o RETURNING usuario_id",
-        p=r["id"],
-        o=p.organization_id,
-    )
-    audit(
-        db,
-        u,
-        "PROJECT_CREATED",
-        detail={"id": r["id"], "assigned_user_ids": [a["user_id"] for a in assigned]},
-    )
-    return r
+    audit(db, u, "Empresa actualizada", detail={"id": oid, "before": old, "after": p.model_dump()})
+    return one(db, "SELECT * FROM empresas WHERE id=:id", id=oid)
 
 
 @bp.route(route="management/users", methods=["POST"])
 @endpoint
 def admin_users(db, req):
     u, p = admin(db, req), body(req, UserCreate)
-    if "CLIENT" in p.roles and not p.organization_id:
-        raise AppError(400, "Asigna una empresa al cliente.")
-    execute(db, "SELECT pg_advisory_xact_lock(481701)")
+    administrative_lock(db)
+    valid_company(db, p.organization_id, p.roles)
     r = one(
         db,
-        "INSERT INTO usuarios(nombre,correo,empresa_id,roles,hash_contrasena) VALUES(:n,:e,:o,:roles,:hash) RETURNING id",
+        "INSERT INTO usuarios(nombre,correo,num_telefono,empresa_id,roles,hash_contrasena) VALUES(:n,:e,:phone,:o,:roles,:hash) RETURNING id",
         n=p.name,
         e=str(p.email).lower(),
+        phone=p.phone or None,
         o=p.organization_id,
         roles=p.roles,
         hash=hasher.hash(p.password),
     )
-    members(db, r["id"], p.project_ids, p.organization_id)
-    audit(db, u, "USER_CREATED", detail={"id": r["id"], "roles": p.roles, "project_ids": p.project_ids})
+    audit(db, u, "USER_CREATED", detail={"id": r["id"], "roles": p.roles})
     return r
 
 
@@ -105,7 +112,7 @@ def admin_users(db, req):
 @endpoint
 def edit_user(db, req):
     u, p = admin(db, req), body(req, UserEdit)
-    # Serialize administrative membership changes, including concurrent last-admin demotions.
+    # Serialize administrative account changes, including concurrent last-admin demotions.
     execute(db, "SELECT pg_advisory_xact_lock(481701)")
     target = one(db, "SELECT * FROM usuarios WHERE id=:u FOR UPDATE", u=uid(req.route_params["id"]))
     if not target:
@@ -114,12 +121,13 @@ def edit_user(db, req):
         if one(db, "SELECT count(*) n FROM usuarios WHERE activo AND 'ADMIN'=ANY(roles)")["n"] <= 1:
             raise AppError(409, "Debe existir al menos un administrador activo.")
     organization = p.organization_id if "organization_id" in p.model_fields_set else target["organization_id"]
-    if "CLIENT" in p.roles and not organization:
-        raise AppError(400, "Asigna una empresa al cliente.")
-    members(db, target["id"], p.project_ids, organization)
+    valid_company(db, organization, p.roles)
     execute(
         db,
-        "UPDATE usuarios SET roles=:r,activo=:a,empresa_id=:o WHERE id=:u",
+        "UPDATE usuarios SET nombre=:name,correo=:email,num_telefono=:phone,roles=:r,activo=:a,empresa_id=:o WHERE id=:u",
+        name=p.name,
+        email=str(p.email).lower(),
+        phone=p.phone or None,
         r=p.roles,
         a=p.active,
         o=organization,
@@ -134,7 +142,6 @@ def edit_user(db, req):
             "id": target["id"],
             "roles": p.roles,
             "active": p.active,
-            "project_ids": p.project_ids,
             "organization_id": organization,
         },
     )

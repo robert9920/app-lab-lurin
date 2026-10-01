@@ -25,8 +25,17 @@ def main():
         from sqlalchemy.engine import make_url
 
         url = make_url(settings()["database"])
-        if url.database not in ("lab_lc", "lab_lc_v3", "lab_lc_v3_test"):
-            raise SystemExit("Este instalador solo admite lab_lc (producción), lab_lc_v3 o lab_lc_v3_test.")
+        if url.database not in (
+            "lab_lc",
+            "lab_lc_v3",
+            "lab_lc_v3_test",
+            "lab_lc_release_test",
+            "lab_lc_v4_test",
+            "lab_lc_v4_unit_test",
+        ):
+            raise SystemExit(
+                "Este instalador solo admite lab_lc, lab_lc_v3 o una base ficticia de pruebas prevista."
+            )
         if args.command == "demo" and (settings()["production"] or url.database == "lab_lc"):
             raise SystemExit("No se permiten datos ficticios en producción.")
         sql_dir = Path(__file__).resolve().parents[1] / "sql"
@@ -42,8 +51,14 @@ def main():
                 if args.command == "demo":
                     raise SystemExit("Ejecuta migrate primero.")
                 conn.execute((sql_dir / "01_schema.sql").read_text(encoding="utf-8"))
-            elif conn.execute("SELECT max(version) FROM migraciones_esquema").fetchone()[0] != 3:
-                raise SystemExit("Versión de esquema incompatible.")
+            else:
+                version = conn.execute("SELECT max(version) FROM migraciones_esquema").fetchone()[0]
+                if version == 3 and args.command == "migrate":
+                    conn.execute((sql_dir / "05_actualizacion_solicitudes.sql").read_text(encoding="utf-8"))
+                elif version != 4:
+                    raise SystemExit(
+                        "Versión incompatible; migrate actualiza esquema 3 a 4. Detén los servidores y respalda antes."
+                    )
             conn.execute(
                 (sql_dir / ("03_demo.sql" if args.command == "demo" else "02_catalog.sql")).read_text(
                     encoding="utf-8"
@@ -52,7 +67,7 @@ def main():
         print(
             "Datos ficticios preparados; inicializa las contraseñas con password."
             if args.command == "demo"
-            else "Esquema v3 y catálogo preparados."
+            else "Esquema 4 y catálogo preparados."
         )
         return
     from pydantic import EmailStr, TypeAdapter

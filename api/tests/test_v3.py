@@ -26,12 +26,6 @@ def result(name, db, user, **kwargs):
 def test_draft_author_only_lists_detail_and_creation(db, users):
     draft = "40000000-0000-0000-0000-000000000003"
     # Another client in exactly the same project still cannot read the draft.
-    execute(
-        db,
-        "INSERT INTO miembros_proyecto(usuario_id,proyecto_id) VALUES(:u,:p)",
-        u=users["cliente"]["id"],
-        p="30000000-0000-0000-0000-000000000003",
-    )
     for name in ("admin", "jefe", "tecnico", "cliente"):
         h = identity(db, users[name])
         assert invoke("request_detail", route={"rid": draft}, headers=h).status_code == 404
@@ -45,10 +39,17 @@ def test_draft_author_only_lists_detail_and_creation(db, users):
         ).status_code in (403, 404)
     assert result("request_detail", db, users["externo"], route={"rid": draft})["status"] == "DRAFT"
     data = RequestCreate(
-        project_id="30000000-0000-0000-0000-000000000001",
+        district="Lurín",
+        province="Lima",
+        department="Lima",
+        project_id="DEMO-001",
         title="Privacidad",
         samples=[
-            {"client_code": "S", "assay_ids": [one(db, "SELECT id FROM catalogo_ensayos LIMIT 1")["id"]]}
+            {
+                "material": "Suelo",
+                "client_code": "S",
+                "assay_ids": [one(db, "SELECT id FROM catalogo_ensayos LIMIT 1")["id"]],
+            }
         ],
     )
     for name in ("admin", "jefe", "tecnico"):
@@ -167,14 +168,20 @@ def test_pending_receipt_filter_excludes_only_nonconforming(db, users):
         "UPDATE muestras SET condicion='OBSERVED',recibido_en=now(),recibido_por=:u,observaciones_recepcion='Recepción observada',codigo_recepcion='REC-X',codigo_laboratorio='LAB-X' WHERE codigo_cliente='M-02'",
         u=users["jefe"]["id"],
     )
-    assert result("requests", db, users["jefe"], params={"view": "reception"})["total"] == 1
     assert (
-        result("requests", db, users["jefe"], params={"view": "reception", "condition": "NOT_RECEIVED"})[
-            "total"
-        ]
+        result("requests", db, users["jefe"], params={"view": "reception", "project": "DEMO-001"})["total"]
+        == 1
+    )
+    assert (
+        result(
+            "requests",
+            db,
+            users["jefe"],
+            params={"view": "reception", "condition": "NOT_RECEIVED", "project": "DEMO-001"},
+        )["total"]
         == 0
     )
-    assert result("dashboard", db, users["jefe"])["totals"]["pending_samples"] == 0
+    assert result("dashboard", db, users["jefe"])["totals"]["pending_samples"] == 1
 
 
 def test_assignment_state_machine_and_resume(db, users):
@@ -185,7 +192,7 @@ def test_assignment_state_machine_and_resume(db, users):
     )
     execute(db, "UPDATE ensayos_muestra SET tecnico_id=NULL WHERE id=:id", id=task["id"])
     task["technician_id"] = None
-    assert w.allowed_actions(users["jefe"], task, "APPROVED") == ["assign", "cancel"]
+    assert w.allowed_actions(users["jefe"], task, "APPROVED", "OT-DEMO-001") == ["assign", "cancel"]
 
     def act(user, action, version, **kwargs):
         w.update_tasks(
@@ -277,18 +284,20 @@ def test_technician_with_client_role_can_draft_without_operational_access(db, us
         o=users["cliente"]["organization_id"],
         u=user["id"],
     )
-    project = "30000000-0000-0000-0000-000000000001"
-    execute(
-        db, "INSERT INTO miembros_proyecto(usuario_id,proyecto_id) VALUES(:u,:p)", u=user["id"], p=project
-    )
+    project = "DEMO-001"
+    user["organization_id"] = users["cliente"]["organization_id"]
     rid = w.create_request(
         db,
         user,
         RequestCreate(
+            district="Lurín",
+            province="Lima",
+            department="Lima",
             project_id=project,
             title="Pedido propio del técnico",
             samples=[
                 {
+                    "material": "Suelo",
                     "client_code": "M-PROPIA",
                     "assay_ids": [one(db, "SELECT id FROM catalogo_ensayos LIMIT 1")["id"]],
                 }

@@ -38,7 +38,10 @@ def origin_check(req):
 
 
 def public_user(user):
-    return {key: user[key] for key in ("id", "name", "email", "roles", "organization_id")}
+    return {
+        key: user.get(key)
+        for key in ("id", "name", "email", "roles", "organization_id", "phone", "is_internal")
+    }
 
 
 def require_role(user, *roles):
@@ -59,7 +62,7 @@ def technical_only(user):
 
 
 # Request alias r; scope parameters are always supplied by the authenticated server.
-REQUEST_SCOPE = "(r.estado_solicitud<>'DRAFT' OR r.creado_por=:u) AND\n(:global OR (:client AND r.proyecto_id IN(SELECT proyecto_id FROM miembros_proyecto WHERE usuario_id=:u))\n OR (:tech AND EXISTS(SELECT 1 FROM muestras sx JOIN ensayos_muestra ax ON ax.muestra_id=sx.id\n WHERE sx.solicitud_id=r.id AND ax.tecnico_id=:u)))"
+REQUEST_SCOPE = "(r.estado_solicitud<>'DRAFT' OR r.creado_por=:u) AND\n(:global OR (:client AND r.creado_por=:u)\n OR (:tech AND EXISTS(SELECT 1 FROM muestras sx JOIN ensayos_muestra ax ON ax.muestra_id=sx.id\n WHERE sx.solicitud_id=r.id AND ax.tecnico_id=:u)))"
 SAMPLE_SCOPE = (
     "(:all_samples OR EXISTS(SELECT 1 FROM ensayos_muestra ax WHERE ax.muestra_id=s.id AND ax.tecnico_id=:u))"
 )
@@ -75,15 +78,8 @@ def scope_params(user):
     }
 
 
-def client_project(db, user, project_id):
-    return "CLIENT" in user["roles"] and bool(
-        one(
-            db,
-            "SELECT 1 FROM miembros_proyecto WHERE usuario_id=:u AND proyecto_id=:p",
-            u=user["id"],
-            p=project_id,
-        )
-    )
+def client_request(user, request):
+    return "CLIENT" in user["roles"] and request["created_by"] == user["id"]
 
 
 def laboratory_access(db, user, rid, version=None):
@@ -103,7 +99,7 @@ def session(db, req):
     token = token_from(req)
     user = one(
         db,
-        "SELECT u.*,s.vence_en,s.ultimo_acceso FROM sesiones s JOIN usuarios u ON u.id=s.usuario_id\n        WHERE s.hash_token=:hash AND u.activo FOR SHARE OF u",
+        "SELECT u.*,coalesce(o.es_interna,false) es_interna,s.vence_en,s.ultimo_acceso FROM sesiones s JOIN usuarios u ON u.id=s.usuario_id LEFT JOIN empresas o ON o.id=u.empresa_id\n        WHERE s.hash_token=:hash AND u.activo FOR SHARE OF u",
         hash=digest(token),
     )
     now = datetime.now(timezone.utc)
@@ -119,18 +115,6 @@ def session(db, req):
             raise AppError(403, "Protección CSRF: recarga la página.")
     execute(db, "UPDATE sesiones SET ultimo_acceso=now() WHERE hash_token=:hash", hash=digest(token))
     return user
-
-
-def project_access(db, user, pid):
-    project = one(db, "SELECT * FROM proyectos WHERE id=:id", id=pid)
-    if not project or (
-        not is_staff(user)
-        and not one(
-            db, "SELECT 1 FROM miembros_proyecto WHERE usuario_id=:u AND proyecto_id=:p", u=user["id"], p=pid
-        )
-    ):
-        raise AppError(404, "Proyecto no encontrado.")
-    return project
 
 
 def request_access(db, user, rid, version=None, allow_closed=False):

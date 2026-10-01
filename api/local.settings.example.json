@@ -6,7 +6,7 @@
     "APP_ENV": "development",
     "DATABASE_URL": "postgresql+psycopg://lab:CAMBIAR@localhost:5432/lab_lc_v3",
     "APP_ORIGIN": "http://localhost:5173",
-    "STORAGE_MODE": "local"
+    "STORAGE_MODE": "local",
+    "PROJECTS_DATABASE_URL": "postgresql+psycopg://lector_proyectos:CAMBIAR@localhost:5432/AppControlHH"
   }
 }
-

@@ -26,15 +26,16 @@ class Version(Model):
 
 
 class Sample(Model):
+    id: UUID | None = None
     client_code: str = Field(min_length=1, max_length=100)
     borehole: str = Field(default="", max_length=100)
-    material: str = Field(default="Suelo", max_length=100)
+    material: str = Field(min_length=1, max_length=100)
     depth_from: Decimal | None = Field(default=None, ge=0)
     depth_to: Decimal | None = Field(default=None, ge=0)
-    quantity: Decimal | None = Field(default=None, gt=0)
-    unit: str = Field(default="kg", min_length=1, max_length=20)
+    quantity: int | None = Field(default=None, gt=0, strict=True)
+    weight: Decimal | None = Field(default=None, gt=0, allow_inf_nan=False)
     notes: str = Field(default="", max_length=3000)
-    assay_ids: list[UUID] = Field(min_length=1, max_length=40)
+    assay_ids: list[UUID] = Field(default_factory=list, max_length=40)
 
     @model_validator(mode="after")
     def valid_sample(self):
@@ -46,10 +47,15 @@ class Sample(Model):
 
 
 class RequestCreate(Model):
-    project_id: UUID
+    project_id: str | None = Field(default=None, min_length=1, max_length=100)
     title: str = Field(min_length=3, max_length=180)
     notes: str = Field(default="", max_length=5000)
     target_date: date | None = None
+    district: str = Field(min_length=1, max_length=100)
+    province: str = Field(min_length=1, max_length=100)
+    department: str = Field(min_length=1, max_length=100)
+    easting: Decimal | None = Field(default=None, allow_inf_nan=False)
+    northing: Decimal | None = Field(default=None, allow_inf_nan=False)
     samples: list[Sample] = Field(min_length=1, max_length=200)
 
 
@@ -67,7 +73,8 @@ class ReceivedSample(Model):
     codigo_recepcion: str = Field(min_length=1, max_length=60)
     codigo_laboratorio: str = Field(min_length=1, max_length=60)
     condition: Literal["OK", "OBSERVED", "DAMAGED", "INSUFFICIENT"] = "OK"
-    received_quantity: Decimal | None = Field(default=None, gt=0)
+    received_quantity: int | None = Field(default=None, gt=0, strict=True)
+    received_weight: Decimal | None = Field(default=None, gt=0, allow_inf_nan=False)
     reception_notes: str = Field(default="", max_length=3000)
 
     @field_validator("codigo_recepcion", "codigo_laboratorio")
@@ -133,13 +140,23 @@ class WorkUpdate(Model):
 class Organization(Model):
     name: str = Field(min_length=2, max_length=200)
     tax_id: str = Field(default="", max_length=30)
+    active: bool = True
+    is_internal: bool = False
 
 
-class Project(Model):
-    organization_id: UUID
-    code: str = Field(min_length=2, max_length=100)
-    name: str = Field(min_length=3, max_length=250)
-    location: str = Field(default="", max_length=250)
+class OrganizationEdit(Organization):
+    active: bool
+    is_internal: bool = False
+
+
+class WorkOrder(Version):
+    codigo_ot: str = Field(min_length=1, max_length=60)
+    reason: str = Field(default="", max_length=3000)
+
+    @field_validator("codigo_ot")
+    @classmethod
+    def normalize_code(cls, value):
+        return value.upper()
 
 
 class UserCreate(Password):
@@ -147,14 +164,16 @@ class UserCreate(Password):
     organization_id: UUID | None = None
     name: str = Field(min_length=2, max_length=200)
     roles: list[Literal["ADMIN", "MANAGER", "TECH", "CLIENT"]] = Field(min_length=1, max_length=4)
-    project_ids: list[UUID] = Field(default_factory=list, max_length=100)
+    phone: str | None = Field(default=None, max_length=30)
 
 
 class UserEdit(Model):
+    name: str = Field(min_length=2, max_length=200)
+    email: EmailStr
+    phone: str | None = Field(default=None, max_length=30)
     organization_id: UUID | None = None
     roles: list[Literal["ADMIN", "MANAGER", "TECH", "CLIENT"]] = Field(min_length=1, max_length=4)
     active: bool
-    project_ids: list[UUID] = Field(default_factory=list, max_length=100)
 
 
 class Catalog(Model):

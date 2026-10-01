@@ -1,16 +1,24 @@
--- Versión 4: instalar exclusivamente en una base NUEVA y vacía.
+-- Versión 3: instalar exclusivamente en una base NUEVA y vacía.
 BEGIN;
 CREATE TABLE migraciones_esquema (version integer PRIMARY KEY, aplicado_en timestamptz NOT NULL DEFAULT now());
 CREATE TABLE empresas (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), nombre text NOT NULL,
- identificacion_tributaria text UNIQUE, activo boolean NOT NULL DEFAULT true, es_interna boolean NOT NULL DEFAULT false
+ identificacion_tributaria text UNIQUE, activo boolean NOT NULL DEFAULT true
 );
 CREATE TABLE usuarios (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), empresa_id uuid REFERENCES empresas,
- nombre text NOT NULL, num_telefono text, correo text NOT NULL UNIQUE CHECK(correo=lower(correo)),
+ nombre text NOT NULL, correo text NOT NULL UNIQUE CHECK(correo=lower(correo)),
  hash_contrasena text NOT NULL,
  roles text[] NOT NULL DEFAULT '{CLIENT}' CHECK(cardinality(roles)>0 AND roles <@ ARRAY['ADMIN','MANAGER','TECH','CLIENT']),
  activo boolean NOT NULL DEFAULT true, creado_en timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE proyectos (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), empresa_id uuid NOT NULL REFERENCES empresas,
+ codigo text NOT NULL UNIQUE, nombre text NOT NULL, ubicacion text NOT NULL DEFAULT '', activo boolean NOT NULL DEFAULT true
+);
+CREATE TABLE miembros_proyecto (
+ proyecto_id uuid NOT NULL REFERENCES proyectos, usuario_id uuid NOT NULL REFERENCES usuarios,
+ PRIMARY KEY(proyecto_id,usuario_id)
 );
 CREATE TABLE catalogo_ensayos (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), codigo text NOT NULL UNIQUE, nombre text NOT NULL,
@@ -20,11 +28,9 @@ CREATE SEQUENCE numero_solicitud;
 CREATE TABLE solicitudes (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  codigo text NOT NULL UNIQUE DEFAULT ('SOL-' || lpad(nextval('numero_solicitud')::text,8,'0')),
- proyecto_id text NOT NULL, empresa_id uuid NOT NULL REFERENCES empresas, creado_por uuid NOT NULL REFERENCES usuarios,
- distrito text, provincia text, departamento text, coordenada_este numeric, coordenada_norte numeric,
- codigo_ot text CHECK(codigo_ot IS NULL OR (codigo_ot=upper(trim(codigo_ot)) AND length(codigo_ot) BETWEEN 1 AND 60)),
+ proyecto_id uuid NOT NULL REFERENCES proyectos, creado_por uuid NOT NULL REFERENCES usuarios,
  titulo text NOT NULL, estado_solicitud text NOT NULL DEFAULT 'DRAFT'
- CHECK(estado_solicitud IN ('DRAFT','WAITING_ASSAYS','SUBMITTED','OBSERVED','APPROVED','REJECTED','CLOSED')),
+ CHECK(estado_solicitud IN ('DRAFT','SUBMITTED','OBSERVED','APPROVED','REJECTED','CLOSED')),
  observaciones text NOT NULL DEFAULT '', fecha_objetivo date,
  version integer NOT NULL DEFAULT 1 CHECK(version>0),
  creado_en timestamptz NOT NULL DEFAULT now(), actualizado_en timestamptz NOT NULL DEFAULT now()
@@ -33,11 +39,9 @@ CREATE TABLE muestras (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), solicitud_id uuid NOT NULL REFERENCES solicitudes,
  codigo_cliente text NOT NULL, calicata_sondaje text NOT NULL DEFAULT '', material text NOT NULL DEFAULT 'Suelo',
  profundidad_inicial numeric CHECK(profundidad_inicial>=0), profundidad_final numeric CHECK(profundidad_final>=0),
- cantidad numeric CHECK(cantidad>0 AND cantidad=trunc(cantidad) AND cantidad NOT IN ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)),
- peso numeric CHECK(peso>0 AND peso NOT IN ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)), observaciones text NOT NULL DEFAULT '',
+ cantidad numeric CHECK(cantidad>0), unidad text NOT NULL DEFAULT 'kg', observaciones text NOT NULL DEFAULT '',
  recibido_en timestamptz, recibido_por uuid REFERENCES usuarios, transporte text NOT NULL DEFAULT '',
- cantidad_recibida numeric CHECK(cantidad_recibida>0 AND cantidad_recibida=trunc(cantidad_recibida) AND cantidad_recibida NOT IN ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)),
- peso_recibido numeric CHECK(peso_recibido>0 AND peso_recibido NOT IN ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)), condicion text NOT NULL DEFAULT 'NOT_RECEIVED'
+ cantidad_recibida numeric CHECK(cantidad_recibida>0), condicion text NOT NULL DEFAULT 'NOT_RECEIVED'
  CHECK(condicion IN ('NOT_RECEIVED','OK','OBSERVED','DAMAGED','INSUFFICIENT')),
  observaciones_recepcion text NOT NULL DEFAULT '',
  codigo_recepcion text CHECK(codigo_recepcion=upper(trim(codigo_recepcion)) AND length(codigo_recepcion) BETWEEN 1 AND 60),
@@ -80,9 +84,8 @@ CREATE TABLE sesiones (
 CREATE TABLE limites_intentos (
  clave_limite text PRIMARY KEY, numero_intentos integer NOT NULL DEFAULT 1, inicio_ventana timestamptz NOT NULL DEFAULT now()
 );
-CREATE UNIQUE INDEX una_empresa_interna ON empresas(es_interna) WHERE es_interna;
-CREATE INDEX solicitudes_autor ON solicitudes(creado_por);
-CREATE INDEX solicitudes_empresa ON solicitudes(empresa_id);
+CREATE INDEX ON miembros_proyecto(usuario_id);
+CREATE INDEX ON proyectos(empresa_id);
 CREATE INDEX ON solicitudes(proyecto_id,estado_solicitud);
 CREATE INDEX ON muestras(solicitud_id);
 CREATE INDEX ON ensayos_muestra(estado_ensayo,fin_previsto);
@@ -94,6 +97,6 @@ CREATE FUNCTION historial_inmutable() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN RAISE EXCEPTION 'El historial es inmutable'; END $$;
 CREATE TRIGGER actividad_inmutable BEFORE UPDATE OR DELETE ON actividad FOR EACH ROW EXECUTE FUNCTION historial_inmutable();
 CREATE TRIGGER informes_inmutables BEFORE UPDATE OR DELETE ON informes FOR EACH ROW EXECUTE FUNCTION historial_inmutable();
-INSERT INTO migraciones_esquema(version) VALUES(4);
+INSERT INTO migraciones_esquema(version) VALUES(3);
 COMMIT;
 

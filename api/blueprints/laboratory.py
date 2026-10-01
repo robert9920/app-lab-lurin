@@ -14,11 +14,20 @@ from security import (
 )
 from services import workflow as w
 from services.common import audit, touch
-from validation import Action, Comment, Reception, RequestCreate, RequestEdit, TaskUpdate, WorkUpdate
+from validation import (
+    Action,
+    Comment,
+    Reception,
+    RequestCreate,
+    RequestEdit,
+    TaskUpdate,
+    WorkOrder,
+    WorkUpdate,
+)
 
 bp = func.Blueprint()
 SCOPE = REQUEST_SCOPE
-TASK_FROM = "FROM ensayos_muestra a JOIN muestras s ON s.id=a.muestra_id JOIN solicitudes r ON r.id=s.solicitud_id\n    JOIN proyectos p ON p.id=r.proyecto_id JOIN catalogo_ensayos c ON c.id=a.ensayo_id LEFT JOIN usuarios t ON t.id=a.tecnico_id"
+TASK_FROM = "FROM ensayos_muestra a JOIN muestras s ON s.id=a.muestra_id JOIN solicitudes r ON r.id=s.solicitud_id\n    JOIN catalogo_ensayos c ON c.id=a.ensayo_id LEFT JOIN usuarios t ON t.id=a.tecnico_id"
 OPEN = "r.estado_solicitud='APPROVED' AND a.estado_ensayo NOT IN ('COMPLETED','CANCELLED')"
 
 
@@ -46,9 +55,22 @@ def page_result(db, req, select, source, where, params, order):
 @endpoint
 def projects(db, req):
     u = session(db, req)
+    if req.params.get("scope", "requests") == "catalog":
+        require_role(u, "CLIENT")
+        org = w.organization_for(db, u)
+        if not org["is_internal"]:
+            raise AppError(403, "El catálogo de proyectos está disponible para clientes internos.")
+        from services.projects import catalog
+
+        page, limit = paging(req)
+        return catalog(req.params.get("q", ""), page, limit)
+    if req.params.get("scope", "requests") != "requests":
+        raise AppError(400, "Filtro de proyectos inválido.")
     return rows(
         db,
-        "SELECT p.*,o.nombre organization_name FROM proyectos p JOIN empresas o ON o.id=p.empresa_id\n        WHERE (:global OR (:client AND p.id IN(SELECT proyecto_id FROM miembros_proyecto WHERE usuario_id=:u))\n        OR (:tech AND EXISTS(SELECT 1 FROM solicitudes r JOIN muestras s ON s.solicitud_id=r.id\n        JOIN ensayos_muestra a ON a.muestra_id=s.id WHERE r.proyecto_id=p.id AND r.estado_solicitud<>'DRAFT' AND a.tecnico_id=:u))) ORDER BY p.codigo",
+        "SELECT DISTINCT r.proyecto_id id,r.proyecto_id code,r.proyecto_id name FROM solicitudes r WHERE "
+        + SCOPE
+        + " ORDER BY r.proyecto_id",
         **scope_params(u),
     )
 
@@ -87,20 +109,24 @@ def requests(db, req):
     }
     where = (
         SCOPE
-        + " AND (:status='' OR r.estado_solicitud=:status) AND (:project='' OR r.proyecto_id::text=:project) AND (r.codigo ILIKE :q OR r.titulo ILIKE :q OR p.codigo ILIKE :q)"
+        + " AND (:status='' OR r.estado_solicitud=:status) AND (:project='' OR r.proyecto_id::text=:project) AND (r.codigo ILIKE :q OR r.titulo ILIKE :q OR r.proyecto_id ILIKE :q)"
     )
     if req.params.get("view") == "reception":
         require_role(u, "ADMIN", "MANAGER", "TECH")
         where += (
-            " AND r.estado_solicitud='APPROVED' AND EXISTS(SELECT 1 FROM muestras s WHERE s.solicitud_id=r.id AND s.condicion<>'OK' AND "
+            " AND r.estado_solicitud IN ('WAITING_ASSAYS','SUBMITTED','OBSERVED','APPROVED') AND (r.codigo_ot IS NULL OR EXISTS(SELECT 1 FROM muestras s WHERE s.solicitud_id=r.id AND s.condicion<>'OK' AND "
             + SAMPLE_SCOPE
-            + ")"
+            + "))"
         )
+        if technical_only(u):
+            where += " AND r.estado_solicitud='APPROVED'"
     if req.params.get("view") == "reception":
         condition = req.params.get("condition", "")
-        if condition not in ("", "NOT_RECEIVED", "issues"):
+        if condition not in ("", "NOT_RECEIVED", "issues", "NO_OT"):
             raise AppError(400, "Filtro de recepción inválido.")
-        if condition:
+        if condition == "NO_OT":
+            where += " AND r.codigo_ot IS NULL"
+        elif condition:
             predicate = (
                 "s.condicion='NOT_RECEIVED'"
                 if condition == "NOT_RECEIVED"
@@ -116,8 +142,8 @@ def requests(db, req):
     return page_result(
         db,
         req,
-        "SELECT r.*,p.codigo project_code,p.nombre project_name,\n        (SELECT count(*) FROM muestras s WHERE s.solicitud_id=r.id AND s.condicion<>'OK' AND (:all_samples OR EXISTS(SELECT 1 FROM ensayos_muestra ax WHERE ax.muestra_id=s.id AND ax.tecnico_id=:u))) pending_samples,\n        (SELECT count(*) FROM ensayos_muestra a JOIN muestras s ON s.id=a.muestra_id WHERE s.solicitud_id=r.id AND a.estado_ensayo<>'CANCELLED' AND (:all_samples OR a.tecnico_id=:u)) task_count,\n        (SELECT count(*) FROM ensayos_muestra a JOIN muestras s ON s.id=a.muestra_id WHERE s.solicitud_id=r.id AND a.estado_ensayo='COMPLETED' AND (:all_samples OR a.tecnico_id=:u)) completed_count",
-        "FROM solicitudes r JOIN proyectos p ON p.id=r.proyecto_id",
+        "SELECT r.*,r.proyecto_id project_code,r.proyecto_id project_name,\n        (SELECT count(*) FROM muestras s WHERE s.solicitud_id=r.id AND s.condicion<>'OK' AND (:all_samples OR EXISTS(SELECT 1 FROM ensayos_muestra ax WHERE ax.muestra_id=s.id AND ax.tecnico_id=:u))) pending_samples,\n        (SELECT count(*) FROM ensayos_muestra a JOIN muestras s ON s.id=a.muestra_id WHERE s.solicitud_id=r.id AND a.estado_ensayo<>'CANCELLED' AND (:all_samples OR a.tecnico_id=:u)) task_count,\n        (SELECT count(*) FROM ensayos_muestra a JOIN muestras s ON s.id=a.muestra_id WHERE s.solicitud_id=r.id AND a.estado_ensayo='COMPLETED' AND (:all_samples OR a.tecnico_id=:u)) completed_count",
+        "FROM solicitudes r",
         where,
         params,
         "r.creado_en DESC,r.id",
@@ -224,7 +250,7 @@ def work(db, req):
     result = page_result(
         db,
         req,
-        "SELECT a.*,s.codigo_cliente sample_code,s.condicion,c.nombre assay_name,t.nombre technician_name,\n        r.id solicitud_id,r.codigo request_code,r.version request_version,r.estado_solicitud request_status,p.codigo project_code",
+        "SELECT a.*,s.codigo_cliente sample_code,s.condicion,c.nombre assay_name,t.nombre technician_name,\n        r.id solicitud_id,r.codigo request_code,r.version request_version,r.estado_solicitud request_status,r.codigo_ot,r.proyecto_id project_code",
         TASK_FROM,
         " AND ".join(where),
         params,
@@ -232,7 +258,7 @@ def work(db, req):
     )
     for task in result["items"]:
         task["assigned"] = task["technician_id"] is not None
-        task["allowed_actions"] = w.allowed_actions(u, task, task["request_status"])
+        task["allowed_actions"] = w.allowed_actions(u, task, task["request_status"], task["codigo_ot"])
     return result
 
 
@@ -258,10 +284,11 @@ def dashboard(db, req):
     ):
         totals[key] = one(
             db,
-            "SELECT count(*) n FROM muestras s JOIN solicitudes r ON r.id=s.solicitud_id WHERE r.estado_solicitud='APPROVED' AND "
+            "SELECT count(*) n FROM muestras s JOIN solicitudes r ON r.id=s.solicitud_id WHERE r.estado_solicitud IN ('WAITING_ASSAYS','SUBMITTED','OBSERVED','APPROVED') AND "
             + predicate
             + " AND "
-            + SAMPLE_SCOPE,
+            + SAMPLE_SCOPE
+            + (" AND r.estado_solicitud='APPROVED'" if technical_only(u) else ""),
             **params,
         )["n"]
     return {
@@ -303,3 +330,11 @@ def dashboard(db, req):
             **params,
         ),
     }
+
+
+@bp.route(route="requests/{rid}/work-order", methods=["POST"])
+@endpoint
+def work_order(db, req):
+    u, rid = session(db, req), uid(req.route_params["rid"])
+    w.work_order(db, u, rid, body(req, WorkOrder))
+    return w.detail(db, u, rid)

@@ -1,5 +1,5 @@
 ---
-title: Laboratorio Lara Consulting · PostgreSQL v3
+title: Laboratorio Lara Consulting · PostgreSQL v4
 config:
   theme: neutral
 ---
@@ -9,28 +9,18 @@ erDiagram
         text nombre
         text identificacion_tributaria
         boolean activo
+        boolean es_interna
     }
     usuarios {
         uuid id PK
         uuid empresa_id FK
         text nombre
+        text num_telefono
         text correo
         text hash_contrasena
         text_array roles
         boolean activo
         timestamptz creado_en
-    }
-    proyectos {
-        uuid id PK
-        uuid empresa_id FK
-        text codigo
-        text nombre
-        text ubicacion
-        boolean activo
-    }
-    miembros_proyecto {
-        uuid proyecto_id PK,FK
-        uuid usuario_id PK,FK
     }
     catalogo_ensayos {
         uuid id PK
@@ -43,8 +33,15 @@ erDiagram
     solicitudes {
         uuid id PK
         text codigo
-        uuid proyecto_id FK
+        text proyecto_id
+        uuid empresa_id FK
         uuid creado_por FK
+        text distrito
+        text provincia
+        text departamento
+        numeric coordenada_este
+        numeric coordenada_norte
+        text codigo_ot
         text titulo
         text estado_solicitud
         text observaciones
@@ -62,12 +59,13 @@ erDiagram
         numeric profundidad_inicial
         numeric profundidad_final
         numeric cantidad
-        text unidad
+        numeric peso
         text observaciones
         timestamptz recibido_en
         uuid recibido_por FK
         text transporte
         numeric cantidad_recibida
+        numeric peso_recibido
         text condicion
         text observaciones_recepcion
         text codigo_recepcion
@@ -129,12 +127,9 @@ erDiagram
     usuarios |o--o{ ensayos_muestra : "tecnico_id"
     solicitudes ||--o{ informes : "solicitud_id"
     usuarios ||--o{ informes : "subido_por"
-    proyectos ||--o{ miembros_proyecto : "proyecto_id"
-    usuarios ||--o{ miembros_proyecto : "usuario_id"
     usuarios |o--o{ muestras : "recibido_por"
     solicitudes ||--o{ muestras : "solicitud_id"
-    empresas ||--o{ proyectos : "empresa_id"
     usuarios ||--o{ sesiones : "usuario_id"
     usuarios ||--o{ solicitudes : "creado_por"
-    proyectos ||--o{ solicitudes : "proyecto_id"
+    empresas ||--o{ solicitudes : "empresa_id"
     empresas |o--o{ usuarios : "empresa_id"

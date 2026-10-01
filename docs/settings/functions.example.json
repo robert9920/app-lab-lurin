@@ -15,6 +15,11 @@
     "slotSetting": false
   },
   {
+    "name": "PROJECTS_DATABASE_URL",
+    "value": "postgresql+psycopg://lector_proyectos:REEMPLAZAR@SERVIDOR.postgres.database.azure.com:5432/AppControlHH?sslmode=verify-full&sslrootcert=/home/site/wwwroot/certs/azure-postgresql-roots.pem",
+    "slotSetting": false
+  },
+  {
     "name": "STORAGE_MODE",
     "value": "azure",
     "slotSetting": false

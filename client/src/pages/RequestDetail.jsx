@@ -12,6 +12,7 @@ import {
   Empty,
   fmtDate,
 } from "../components/ui";
+import WorkOrderForm from "../components/WorkOrderForm";
 import ReceptionForm from "../components/ReceptionForm";
 import WorkPanel from "../components/WorkPanel";
 import ReportUpload from "../components/ReportUpload";
@@ -109,7 +110,11 @@ export default function RequestDetail() {
           <PageHead
             eyebrow={r.code + " · " + r.project.code}
             title={r.title}
-            description={r.project.name}
+            description={
+              r.project.organization_name +
+              " · " +
+              [r.district, r.province, r.department].filter(Boolean).join(", ")
+            }
           >
             <Badge state={r.status} />
           </PageHead>
@@ -134,12 +139,21 @@ export default function RequestDetail() {
               </button>
             ))}
           </div>
-          <section className={"card form-card" + (tab === "summary" ? " request-summary" : "")}>
+          <section
+            className={
+              "card form-card" +
+              (tab === "summary"
+                ? " request-summary"
+                : tab === "work"
+                  ? " work-detail"
+                  : "")
+            }
+          >
             {tab === "summary" && (
               <>
                 <div className="summary-heading">
                   <h2>Solicitud y muestras</h2>
-                  {canRequest && ["DRAFT", "OBSERVED"].includes(r.status) && (
+                  {r.can_edit && (
                     <Link className="btn" to={"/requests/" + id + "/edit"}>
                       Editar solicitud
                     </Link>
@@ -147,7 +161,14 @@ export default function RequestDetail() {
                 </div>
                 {r.notes && <p>{r.notes}</p>}
                 <p className="muted">
-                  Fecha objetivo: {fmtDate(r.target_date)} · Versión {r.version}
+                  Fecha objetivo: {fmtDate(r.target_date)} · OT:{" "}
+                  {r.codigo_ot || "Sin OT"} · Versión {r.version}
+                  {(r.easting != null || r.northing != null) && (
+                    <span className="block">
+                      Este: {r.easting ?? "Sin dato"} · Norte:{" "}
+                      {r.northing ?? "Sin dato"}
+                    </span>
+                  )}
                 </p>
                 <div className="table-scroll">
                   <table>
@@ -165,20 +186,36 @@ export default function RequestDetail() {
                           <td>
                             <b>{s.client_code}</b>
                             <small className="block">
-                              {s.borehole} · {s.notes}
+                              {[s.borehole, s.notes]
+                                .filter(Boolean)
+                                .join(" · ")}
                             </small>
                           </td>
                           <td>
                             {s.material}
+                            {(s.depth_from != null || s.depth_to != null) && (
+                              <small className="block">
+                                Prof.:{" "}
+                                {s.depth_from == null
+                                  ? "Sin dato"
+                                  : Number(s.depth_from).toFixed(2)}{" "}
+                                –{" "}
+                                {s.depth_to == null
+                                  ? "Sin dato"
+                                  : Number(s.depth_to).toFixed(2)}{" "}
+                                m
+                              </small>
+                            )}
                             <small className="block">
-                              {s.quantity ?? "No informada"} {s.unit}
+                              Sacos: {s.quantity ?? "Sin dato"} · Peso:{" "}
+                              {s.weight ?? "Sin dato"} kg
                             </small>
                           </td>
                           <td>
                             {r.tasks
                               .filter((t) => t.sample_id === s.id)
                               .map((t) => t.assay_name || t.name)
-                              .join(", ")}
+                              .join(", ") || "Pendientes de definir"}
                           </td>
                           <td>
                             <Badge state={s.condition} />
@@ -239,7 +276,26 @@ export default function RequestDetail() {
             )}
             {tab === "reception" && (
               <>
-                {(manager || r.samples.some((s) => s.can_receive)) && r.status === "APPROVED" ? (
+                {manager &&
+                  [
+                    "WAITING_ASSAYS",
+                    "SUBMITTED",
+                    "OBSERVED",
+                    "APPROVED",
+                  ].includes(r.status) && (
+                    <WorkOrderForm
+                      key={"ot-" + r.version}
+                      request={r}
+                      onDone={setR}
+                    />
+                  )}
+                {(manager || r.samples.some((s) => s.can_receive)) &&
+                [
+                  "WAITING_ASSAYS",
+                  "SUBMITTED",
+                  "OBSERVED",
+                  "APPROVED",
+                ].includes(r.status) ? (
                   <ReceptionForm key={r.version} request={r} onDone={setR} />
                 ) : (
                   <>
@@ -250,7 +306,7 @@ export default function RequestDetail() {
                           <b>{s.client_code}</b>
                           <p>{s.reception_notes}</p>
                           <small>
-                            {fmtDate(s.received_at && s.can_receive)} · {s.transport}
+                            {fmtDate(s.received_at)} · {s.transport}
                           </small>
                         </div>
                         <Badge state={s.condition} />
@@ -265,9 +321,13 @@ export default function RequestDetail() {
                       <input
                         type="checkbox"
                         checked={
-                          r.samples.some((s) => s.received_at && s.can_receive) &&
+                          r.samples.some(
+                            (s) => s.received_at && s.can_receive,
+                          ) &&
                           labelIds.length ===
-                            r.samples.filter((s) => s.received_at && s.can_receive).length
+                            r.samples.filter(
+                              (s) => s.received_at && s.can_receive,
+                            ).length
                         }
                         onChange={(e) =>
                           setLabelIds(
@@ -330,14 +390,15 @@ export default function RequestDetail() {
                   Cada carga conserva una versión y queda disponible
                   inmediatamente para las personas autorizadas del proyecto.
                 </p>
-                {(manager || r.samples.some((s) => s.can_receive)) && r.status === "APPROVED" && (
-                  <ReportUpload
-                    request={r}
-                    onDone={() =>
-                      api.get("/requests/" + id).then((x) => setR(x.data))
-                    }
-                  />
-                )}{" "}
+                {(manager || r.samples.some((s) => s.can_receive)) &&
+                  r.status === "APPROVED" && (
+                    <ReportUpload
+                      request={r}
+                      onDone={() =>
+                        api.get("/requests/" + id).then((x) => setR(x.data))
+                      }
+                    />
+                  )}{" "}
                 {r.reports.length ? (
                   r.reports.map((d) => (
                     <div className="due-row" key={d.id}>
@@ -390,16 +451,17 @@ export default function RequestDetail() {
                         onChange={(e) => setComment(e.target.value)}
                       />
                     </Field>
-                    {staff && (manager || r.samples.some((s) => s.can_receive)) && (
-                      <label className="check-label">
-                        <input
-                          type="checkbox"
-                          checked={internal}
-                          onChange={(e) => setInternal(e.target.checked)}
-                        />
-                        Solo laboratorio
-                      </label>
-                    )}
+                    {staff &&
+                      (manager || r.samples.some((s) => s.can_receive)) && (
+                        <label className="check-label">
+                          <input
+                            type="checkbox"
+                            checked={internal}
+                            onChange={(e) => setInternal(e.target.checked)}
+                          />
+                          Solo laboratorio
+                        </label>
+                      )}
                     <Button busy={busy} variant="primary">
                       Añadir comentario
                     </Button>

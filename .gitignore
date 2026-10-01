@@ -24,3 +24,8 @@ pytest-cache-files-*/
 *.pfx
 *.p12
 !api/certs/*.pem
+
+**/*.pyc
+**/*.pyo
+**/.cache/**
+**/.vite/**

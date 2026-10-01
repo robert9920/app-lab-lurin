@@ -102,10 +102,12 @@ def render(data, kind):
             ),
             p("Transporte: " + (s["transport"] or "No indicado")),
             p(
-                "Cantidad recibida: "
+                "Sacos recibidos: "
                 + str(s["received_quantity"] if s["received_quantity"] is not None else "No informada")
-                + " "
-                + s["unit"]
+            ),
+            p(
+                "Peso recibido (kg): "
+                + str(s.get("received_weight") if s.get("received_weight") is not None else "No informado")
             ),
             p("Observaciones: " + s["reception_notes"]),
             Spacer(1, 10),

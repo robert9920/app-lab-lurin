@@ -1,4 +1,4 @@
-"""Exporta contratos, diccionario y ERD desde la base v2 instalada (solo lectura)."""
+"""Exporta contratos, diccionario y ERD desde la esquema 4 instalado (solo lectura)."""
 
 import json
 import os
@@ -10,11 +10,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 local = ROOT / "api/local.settings.json"
 if local.exists():
-    for key, value in json.loads(local.read_text(encoding="utf-8-sig"))["Values"].items():
+    for key, value in json.loads(local.read_text(encoding="utf-8-sig"))[
+        "Values"
+    ].items():
         os.environ.setdefault(key, value)
-import validation as v  # noqa: E402
-from database import engine, rows  # noqa: E402
-from function_app import app  # noqa: E402
+import validation as v
+from database import engine, rows
+from function_app import app
 
 PURPOSE = {
     "organizations": "Empresas propietarias de los proyectos.",
@@ -126,10 +128,12 @@ OVERRIDES = {
 }
 
 
-from schema_names import TABLE_NAMES, FIELD_NAMES
+from schema_names import FIELD_NAMES, TABLE_NAMES
 
 PURPOSE = {
-    TABLE_NAMES.get(k, k): value.replace("activity", "actividad").replace("versión 2", "versión 3")
+    TABLE_NAMES.get(k, k): value.replace("activity", "actividad").replace(
+        "versión 2", "versión 3"
+    )
     for k, value in PURPOSE.items()
 }
 MEANINGS = {FIELD_NAMES.get(k, k): value for k, value in MEANINGS.items()}
@@ -141,11 +145,49 @@ MEANINGS.update(
     }
 )
 OVERRIDES = {
-    (TABLE_NAMES.get(t, t), FIELD_NAMES.get(c, c)): value.replace("inserta 2", "inserta 3").replace(
-        "request_number", "numero_solicitud"
-    )
+    (TABLE_NAMES.get(t, t), FIELD_NAMES.get(c, c)): value.replace(
+        "inserta 2", "inserta 3"
+    ).replace("request_number", "numero_solicitud")
     for (t, c), value in OVERRIDES.items()
 }
+
+
+# Esquema 4; diccionario físico en español, sin asignaciones a proyectos.
+for obsolete in ("projects", "project_members", "proyectos", "miembros_proyecto"):
+    PURPOSE.pop(obsolete, None)
+PURPOSE.update(
+    {
+        "empresas": "Empresas de los solicitantes; como máximo una es interna.",
+        "usuarios": "Identidad, contacto, empresa y roles de acceso; no existen asignaciones a proyectos.",
+        "solicitudes": "Solicitud del autor; empresa conservada y código externo de proyecto sin FK entre bases.",
+        "migraciones_esquema": "Versiones instaladas, independientes del nombre de la base. El esquema actual es 4.",
+    }
+)
+MEANINGS.update(
+    {
+        "es_interna": "Designa la única empresa interna; sus clientes seleccionan proyectos de AppControlHH.",
+        "num_telefono": "Teléfono opcional como texto, permite prefijo internacional.",
+        "proyecto_id": "Código de AppControlHH para solicitudes internas; EXTERNO para nuevas solicitudes externas. No es UUID ni FK.",
+        "distrito": "Distrito de procedencia. Obligatorio en API al crear/editar; NULL permitido en registros históricos migrados.",
+        "provincia": "Provincia de procedencia. Obligatoria en API al crear/editar; NULL permitido en históricos.",
+        "departamento": "Departamento de procedencia. Obligatorio en API al crear/editar; NULL permitido en históricos.",
+        "coordenada_este": "Coordenada este opcional. NULL si se desconoce; no se convierte ni se presume sistema de referencia.",
+        "coordenada_norte": "Coordenada norte opcional. NULL si se desconoce; no se convierte ni se presume sistema de referencia.",
+        "codigo_ot": "OT manual normalizada en mayúsculas. Jefatura requiere al menos una muestra recibida para registrarla; correcciones con motivo.",
+        "cantidad": "Cantidad declarada de sacos enteros positivos; NULL significa desconocida.",
+        "cantidad_recibida": "Cantidad actual de sacos recibidos, enteros positivos y opcionales; no se acumula al corregir.",
+        "peso": "Peso declarado en kg, positivo y opcional; separado de los sacos.",
+        "peso_recibido": "Peso real recibido en kg, positivo y opcional; permite comparar con el declarado.",
+        "estado_solicitud": "DRAFT, WAITING_ASSAYS, SUBMITTED, OBSERVED, APPROVED, REJECTED o CLOSED.",
+        "interno": "true restringe el evento al personal autorizado; false permite verlo al autor de la solicitud.",
+    }
+)
+OVERRIDES[("solicitudes", "empresa_id")] = (
+    "Empresa conservada al crear la solicitud, independiente de cambios posteriores en el usuario. FK empresas.id."
+)
+OVERRIDES[("migraciones_esquema", "version")] = (
+    "Versión instalada, PK. Instalación limpia: 4; una migración conserva además el registro 3."
+)
 
 
 def inspect_schema():
@@ -170,14 +212,16 @@ def inspect_schema():
             WHERE c.table_schema='public' AND c.constraint_type='PRIMARY KEY'""",
         )
     if {c["table_name"] for c in columns} != set(PURPOSE):
-        raise RuntimeError("El exportador requiere exclusivamente las 13 tablas del esquema v3")
+        raise RuntimeError(
+            "El exportador requiere exclusivamente las 11 tablas del esquema v4"
+        )
     return columns, foreign, primary
 
 
 def export_erd(columns, foreign, primary):
     lines = [
         "---",
-        "title: Laboratorio Lara Consulting · PostgreSQL v3",
+        "title: Laboratorio Lara Consulting · PostgreSQL v4",
         "config:",
         "  theme: neutral",
         "---",
@@ -211,16 +255,26 @@ def export_erd(columns, foreign, primary):
             }.get(col["data_type"], col["data_type"].replace(" ", "_"))
             relation = fk.get(key)
             tags = (["PK"] if key in pk else []) + (["FK"] if relation else [])
-            lines.append(f"        {dtype} {name}" + (" " + ",".join(tags) if tags else ""))
+            lines.append(
+                f"        {dtype} {name}" + (" " + ",".join(tags) if tags else "")
+            )
             default = col["column_default"] or (
                 "IDENTITY"
                 if col["is_identity"] == "YES"
-                else ("NULL" if col["is_nullable"] == "YES" else "Sin valor; debe suministrarse")
+                else (
+                    "NULL"
+                    if col["is_nullable"] == "YES"
+                    else "Sin valor; debe suministrarse"
+                )
             )
             description = OVERRIDES.get(key, MEANINGS.get(name))
             if not description:
                 raise RuntimeError(f"Falta descripción de {key}")
-            link = (relation["parent"] + "." + relation["parent_column"]) if relation else "—"
+            link = (
+                (relation["parent"] + "." + relation["parent_column"])
+                if relation
+                else "—"
+            )
             if key in pk:
                 link = "PK; " + link if relation else "PK"
             dictionary.append(
@@ -233,7 +287,8 @@ def export_erd(columns, foreign, primary):
             next(
                 c
                 for c in columns
-                if c["table_name"] == f["table_name"] and c["column_name"] == f["column_name"]
+                if c["table_name"] == f["table_name"]
+                and c["column_name"] == f["column_name"]
             )["is_nullable"]
             == "YES"
         )
@@ -249,7 +304,9 @@ def export_erd(columns, foreign, primary):
         "",
         text,
     )
-    readme.write_text(text.rstrip() + "\n\n" + "\n".join(dictionary) + "\n", encoding="utf-8")
+    readme.write_text(
+        text.rstrip() + "\n\n" + "\n".join(dictionary) + "\n", encoding="utf-8"
+    )
     (ROOT / "docs/schema-columns.json").write_text(
         json.dumps(columns, indent=2, ensure_ascii=False), encoding="utf-8"
     )
@@ -266,7 +323,8 @@ def export_openapi():
         "requests/{rid}/comments": v.Comment,
         "work": v.WorkUpdate,
         "management/organizations": v.Organization,
-        "management/projects": v.Project,
+        "management/organizations/{id}": v.OrganizationEdit,
+        "requests/{rid}/work-order": v.WorkOrder,
         "management/users": v.UserCreate,
         "management/users/{id}": v.UserEdit,
         "management/users/{id}/password": v.Password,
@@ -276,21 +334,24 @@ def export_openapi():
         "openapi": "3.1.0",
         "info": {
             "title": "Laboratorio Lara Consulting",
-            "version": "3.0.0",
+            "version": "4.0.0",
             "description": "Sesión opaca en cookie lab_session. Escrituras requieren Origin exacto y X-CSRF-Token de GET /session. "
-            "ADMIN administra; MANAGER dirige; TECH solo consulta sus solicitudes, muestras y ensayos asignados; CLIENT accede por proyecto. Borradores exclusivos de su autor. "
+            "ADMIN administra; MANAGER dirige; TECH solo consulta sus solicitudes, muestras y ensayos asignados; CLIENT accede solo a sus propias solicitudes. Borradores exclusivos de su autor. "
             "En Azure, la clave de Functions se agrega exclusivamente en el proxy. version identifica la revisión de la solicitud. "
             "Los lotes de /work son transaccionales. Cada informe se hace visible al confirmar la carga.",
         },
         "servers": [{"url": "/api"}],
         "paths": {},
         "components": {
-            "securitySchemes": {"session": {"type": "apiKey", "in": "cookie", "name": "lab_session"}},
+            "securitySchemes": {
+                "session": {"type": "apiKey", "in": "cookie", "name": "lab_session"}
+            },
             "schemas": {},
         },
         "security": [{"session": []}],
     }
     queries = {
+        "projects": ["scope", "q", "page", "limit"],
         "requests": ["q", "status", "project", "view", "condition", "page", "limit"],
         "work": [
             "project",
@@ -312,16 +373,37 @@ def export_openapi():
                 "type": "object",
                 "properties": {
                     "id": {"type": "string", "format": "uuid"},
-                    "state": {"enum": ["PENDING", "RUNNING", "OBSERVED", "COMPLETED", "CANCELLED"]},
+                    "state": {
+                        "enum": [
+                            "PENDING",
+                            "RUNNING",
+                            "OBSERVED",
+                            "COMPLETED",
+                            "CANCELLED",
+                        ]
+                    },
                     "technician_id": {"type": ["string", "null"]},
+                    "codigo_ot": {
+                        "type": ["string", "null"],
+                        "description": "OT manual por solicitud; requisito de assign/start/resume, junto con aprobación y material cuando corresponda.",
+                    },
                     "assigned": {
                         "type": "boolean",
                         "description": "Derivado de tecnico_id; no es un estado ni columna duplicada.",
                     },
                     "allowed_actions": {
                         "type": "array",
-                        "items": {"enum": ["assign", "start", "observe", "complete", "resume", "cancel"]},
-                        "description": "Acciones autorizadas por rol, asignación, material y estado. La API valida de nuevo al ejecutar.",
+                        "items": {
+                            "enum": [
+                                "assign",
+                                "start",
+                                "observe",
+                                "complete",
+                                "resume",
+                                "cancel",
+                            ]
+                        },
+                        "description": "Acciones autorizadas por rol, asignación, OT, material y estado. assign/start/resume necesitan APPROVED y OT; RUNNING histórico admite observe/complete sin OT. La API valida de nuevo al ejecutar.",
                     },
                 },
             },
@@ -345,9 +427,22 @@ def export_openapi():
                     "id": {"type": "string", "format": "uuid"},
                     "codigo_recepcion": {"type": ["string", "null"], "maxLength": 60},
                     "codigo_laboratorio": {"type": ["string", "null"], "maxLength": 60},
+                    "quantity": {
+                        "type": ["string", "number", "null"],
+                        "description": "Sacos declarados, entero positivo o desconocido.",
+                    },
+                    "weight": {
+                        "type": ["string", "number", "null"],
+                        "description": "Peso declarado en kg o desconocido; independiente de sacos.",
+                    },
+                    "received_quantity": {"type": ["string", "number", "null"]},
+                    "received_weight": {
+                        "type": ["string", "number", "null"],
+                        "description": "Peso recibido en kg.",
+                    },
                     "can_receive": {
                         "type": "boolean",
-                        "description": "Permiso operativo sobre la muestra; recibir requiere además solicitud aprobada.",
+                        "description": "Permiso operativo sobre la muestra; recibir requiere además solicitud enviada; TECH requiere aprobación y asignación.",
                     },
                 },
             },
@@ -355,7 +450,9 @@ def export_openapi():
     )
     for fn in app.get_functions():
         trigger = next(
-            b for b in json.loads(fn.get_function_json())["bindings"] if b["type"] == "httpTrigger"
+            b
+            for b in json.loads(fn.get_function_json())["bindings"]
+            if b["type"] == "httpTrigger"
         )
         route = trigger["route"]
         for method in trigger["methods"]:
@@ -376,6 +473,7 @@ def export_openapi():
                         (415, "Tipo de contenido incorrecto"),
                         (429, "Demasiados intentos"),
                         (500, "Error interno sin detalles sensibles"),
+                        (503, "Catálogo de proyectos no disponible"),
                     ]
                 },
                 "parameters": [],
@@ -388,12 +486,18 @@ def export_openapi():
                         "required": True,
                         "schema": {
                             "type": "string",
-                            **({"enum": ["receipt", "labels"]} if name == "kind" else {"format": "uuid"}),
+                            **(
+                                {"enum": ["receipt", "labels"]}
+                                if name == "kind"
+                                else {"format": "uuid"}
+                            ),
                         },
                     }
                 )
             if method not in ("get", "head"):
-                for name in ["Origin"] if route == "auth/login" else ["Origin", "X-CSRF-Token"]:
+                for name in (
+                    ["Origin"] if route == "auth/login" else ["Origin", "X-CSRF-Token"]
+                ):
                     op["parameters"].append(
                         {
                             "name": name,
@@ -404,13 +508,19 @@ def export_openapi():
                     )
                 model = models.get(route)
                 if model:
-                    schema = model.model_json_schema(ref_template="#/components/schemas/{model}")
+                    schema = model.model_json_schema(
+                        ref_template="#/components/schemas/{model}"
+                    )
                     spec["components"]["schemas"].update(schema.pop("$defs", {}))
                     spec["components"]["schemas"][model.__name__] = schema
                     op["requestBody"] = {
                         "required": True,
                         "content": {
-                            "application/json": {"schema": {"$ref": "#/components/schemas/" + model.__name__}}
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/" + model.__name__
+                                }
+                            }
                         },
                     }
                 if route.endswith("/reports"):
@@ -442,16 +552,27 @@ def export_openapi():
                         {
                             "type": "integer",
                             "minimum": 1,
-                            **({"maximum": 100, "default": 30} if name == "limit" else {"default": 1}),
+                            **(
+                                {"maximum": 100, "default": 30}
+                                if name == "limit"
+                                else {"default": 1}
+                            ),
                         }
                         if name in ("page", "limit")
                         else {"type": "string"}
                     )
-                    op["parameters"].append({"name": name, "in": "query", "schema": schema})
-                    if name == "condition":
-                        schema["enum"] = ["", "NOT_RECEIVED", "issues"]
+                    op["parameters"].append(
+                        {"name": name, "in": "query", "schema": schema}
+                    )
+                    if name == "scope":
+                        schema["enum"] = ["requests", "catalog"]
                         op["parameters"][-1]["description"] = (
-                            "En view=reception, NOT_RECEIVED exige al menos una muestra sin recibir; issues exige material observado, dañado o insuficiente."
+                            "requests: códigos de solicitudes autorizadas; catalog: AppControlHH, solo CLIENT de empresa interna, respuesta paginada."
+                        )
+                    if name == "condition":
+                        schema["enum"] = ["", "NOT_RECEIVED", "issues", "NO_OT"]
+                        op["parameters"][-1]["description"] = (
+                            "En view=reception, NOT_RECEIVED exige al menos una muestra sin recibir; issues material observado/dañado/insuficiente; NO_OT carece de OT. Incluye solicitudes enviadas sin ensayos; TECH solo aprobadas asignadas."
                         )
                     if name == "sample_ids":
                         op["parameters"][-1]["description"] = (
@@ -465,7 +586,9 @@ def export_openapi():
                                 "properties": {
                                     "items": {
                                         "type": "array",
-                                        "items": {"$ref": "#/components/schemas/WorkTask"},
+                                        "items": {
+                                            "$ref": "#/components/schemas/WorkTask"
+                                        },
                                     },
                                     "total": {"type": "integer"},
                                     "page": {"type": "integer"},
@@ -480,17 +603,55 @@ def export_openapi():
                             "schema": {
                                 "type": "object",
                                 "properties": {
+                                    "project_id": {
+                                        "type": "string",
+                                        "description": "Código de catálogo o EXTERNO; no UUID/FK.",
+                                    },
+                                    "status": {
+                                        "enum": [
+                                            "DRAFT",
+                                            "WAITING_ASSAYS",
+                                            "SUBMITTED",
+                                            "OBSERVED",
+                                            "APPROVED",
+                                            "REJECTED",
+                                            "CLOSED",
+                                        ]
+                                    },
+                                    "can_edit": {
+                                        "type": "boolean",
+                                        "description": "Autor CLIENT antes de aprobación; declaración recibida protegida.",
+                                    },
+                                    "is_internal": {"type": "boolean"},
+                                    "district": {"type": ["string", "null"]},
+                                    "province": {"type": ["string", "null"]},
+                                    "department": {"type": ["string", "null"]},
+                                    "easting": {
+                                        "type": ["string", "number", "null"],
+                                        "description": "Opcional.",
+                                    },
+                                    "northing": {
+                                        "type": ["string", "number", "null"],
+                                        "description": "Opcional.",
+                                    },
+                                    "codigo_ot": {"type": ["string", "null"]},
                                     "tasks": {
                                         "type": "array",
-                                        "items": {"$ref": "#/components/schemas/WorkTask"},
+                                        "items": {
+                                            "$ref": "#/components/schemas/WorkTask"
+                                        },
                                     },
                                     "samples": {
                                         "type": "array",
-                                        "items": {"$ref": "#/components/schemas/ReceivedSampleView"},
+                                        "items": {
+                                            "$ref": "#/components/schemas/ReceivedSampleView"
+                                        },
                                     },
                                     "activity": {
                                         "type": "array",
-                                        "items": {"$ref": "#/components/schemas/HistoryEntry"},
+                                        "items": {
+                                            "$ref": "#/components/schemas/HistoryEntry"
+                                        },
                                     },
                                 },
                             }
@@ -498,7 +659,9 @@ def export_openapi():
                     }
                 if "/download" in route or "/print/" in route:
                     op["responses"]["200"]["content"] = {
-                        "application/pdf": {"schema": {"type": "string", "format": "binary"}}
+                        "application/pdf": {
+                            "schema": {"type": "string", "format": "binary"}
+                        }
                     }
             spec["paths"].setdefault("/" + route, {})[method] = op
     (ROOT / "docs/openapi.json").write_text(

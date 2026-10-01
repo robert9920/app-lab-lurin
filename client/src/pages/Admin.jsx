@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Plus, Users, Building2, FolderKanban, TestTubes } from "lucide-react";
-import { adminPayload, companySelection } from "../services/admin";
+import { Plus, Users, Building2, TestTubes } from "lucide-react";
 import { api, messageOf } from "../services/api";
 import {
   PageHead,
@@ -29,52 +28,75 @@ export default function Admin() {
   useEffect(() => {
     refresh();
   }, [refresh]);
-  function open(type, value = {}) {
+  function open(type, item = {}) {
     setError("");
+    setModal(type);
     setForm(
       type === "users"
         ? {
             name: "",
             email: "",
+            phone: "",
             password: "",
             organization_id: "",
             roles: ["CLIENT"],
-            project_ids: [],
-            ...value,
+            active: true,
+            ...item,
           }
-        : type === "projects"
-          ? { organization_id: "", code: "", name: "", location: "", ...value }
-          : type === "catalog"
-            ? {
+        : type === "organizations"
+          ? { name: "", tax_id: "", active: true, is_internal: false, ...item }
+          : type === "password"
+            ? { password: "", confirm: "", ...item }
+            : {
                 code: "",
                 name: "",
                 method: "",
                 category: "Geotecnia",
                 active: true,
-                ...value,
-              }
-            : { name: "", tax_id: "", ...value },
+                ...item,
+              },
     );
-    setModal(type);
+  }
+  function change(k, v) {
+    setForm({ ...form, [k]: v });
   }
   async function save(e) {
     e.preventDefault();
     setBusy(true);
+    setError("");
     try {
-      if (modal === "edit-user")
-        await api.put(`/management/users/${form.id}`, {
-          roles: form.roles,
-          active: form.active,
-          project_ids: form.project_ids,
-          organization_id: form.organization_id || null,
-        });
-      else if (modal === "password") {
+      let payload;
+      if (modal === "password") {
         if (form.password !== form.confirm)
           throw new Error("Las contraseñas no coinciden.");
         await api.post(`/management/users/${form.id}/password`, {
           password: form.password,
         });
-      } else await api.post(`/management/${modal}`, adminPayload(modal, form));
+      } else {
+        const keys =
+          modal === "users"
+            ? [
+                "name",
+                "email",
+                "phone",
+                "organization_id",
+                "roles",
+                ...(form.id ? ["active"] : ["password"]),
+              ]
+            : modal === "organizations"
+              ? ["name", "tax_id", "active", "is_internal"]
+              : ["code", "name", "method", "category", "active"];
+        payload = Object.fromEntries(keys.map((k) => [k, form[k]]));
+        if (modal === "users") {
+          payload.organization_id ||= null;
+          payload.phone ||= null;
+        }
+        const editing = !!form.id && modal !== "catalog";
+        await api[editing ? "put" : "post"](
+          `/management/${modal}${editing ? "/" + form.id : ""}`,
+          payload,
+        );
+      }
       setModal("");
       await refresh();
     } catch (e) {
@@ -83,33 +105,17 @@ export default function Admin() {
       setBusy(false);
     }
   }
-  function field(key, label, type = "text") {
+  function field(k, l, { type = "text", required = false, max = 200 } = {}) {
     return (
-      <Field label={label}>
+      <Field label={l}>
         <input
           type={type}
-          minLength={
-            type === "password"
-              ? 15
-              : modal === "projects" && key === "name"
-                ? 3
-                : key === "code" && modal === "projects"
-                  ? 2
-                  : undefined
-          }
-          maxLength={
-            type === "password"
-              ? 128
-              : modal === "projects"
-                ? key === "code"
-                  ? 100
-                  : 250
-                : undefined
-          }
+          required={required}
+          maxLength={max}
+          minLength={type === "password" ? 15 : undefined}
           autoComplete={type === "password" ? "new-password" : undefined}
-          required
-          value={form[key] || ""}
-          onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+          value={form[k] || ""}
+          onChange={(e) => change(k, e.target.value)}
         />
       </Field>
     );
@@ -120,7 +126,7 @@ export default function Admin() {
       <PageHead
         eyebrow="CONFIGURACIÓN DEL LABORATORIO"
         title="Administración"
-        description="Define quién puede ingresar y a qué proyectos tiene acceso."
+        description="Gestiona empresas, personas y permisos de acceso."
       >
         <Button variant="primary" onClick={() => open(tab)}>
           <Plus size={17} />
@@ -132,20 +138,19 @@ export default function Admin() {
         {[
           ["users", "Usuarios", Users],
           ["organizations", "Empresas", Building2],
-          ["projects", "Proyectos", FolderKanban],
           ["catalog", "Catálogo", TestTubes],
-        ].map(([k, t, Icon]) => (
+        ].map(([k, l, Icon]) => (
           <button
             key={k}
             className={tab === k ? "active" : ""}
             onClick={() => setTab(k)}
           >
             <Icon size={16} />
-            {t}
+            {l}
           </button>
         ))}
       </div>
-      <section className="card">
+      <section className="card admin-table">
         <div className="table-scroll">
           <table>
             <thead>
@@ -153,79 +158,56 @@ export default function Admin() {
                 <th>Nombre</th>
                 <th>
                   {tab === "users"
-                    ? "Correo / permisos"
+                    ? "Correo / teléfono / empresa"
                     : tab === "catalog"
                       ? "Método"
-                      : "Código / empresa"}
+                      : "Identificación tributaria"}
                 </th>
+                <th>Permisos / clasificación</th>
                 <th>Estado</th>
                 <th />
               </tr>
             </thead>
             <tbody>
-              {data[tab].map((item) => (
-                <tr key={item.id}>
+              {data[tab].map((x) => (
+                <tr key={x.id}>
                   <td>
-                    <b>{item.name}</b>
+                    <b>{x.name}</b>
                   </td>
                   <td>
-                    {item.email ||
-                      item.method ||
-                      item.code ||
-                      item.tax_id ||
-                      "—"}
-                    {item.roles && (
+                    {x.email || x.method || x.tax_id || "—"}
+                    {x.phone && <small className="block">{x.phone}</small>}
+                    {tab === "users" && (
                       <small className="block">
-                        {item.roles.map((r) => labels[r]).join(" · ")}
+                        {data.organizations.find(
+                          (o) => o.id === x.organization_id,
+                        )?.name || "Sin empresa"}
                       </small>
                     )}
                   </td>
                   <td>
-                    <Badge state={item.active === false ? "CANCELLED" : "OK"}>
-                      {item.active === false
-                        ? "Deshabilitado"
-                        : item.activated === false
-                          ? "Habilitado"
-                          : "Habilitado"}
+                    {x.roles
+                      ? x.roles.map((r) => labels[r]).join(" · ")
+                      : tab === "organizations"
+                        ? x.is_internal
+                          ? "Empresa interna"
+                          : "Empresa externa"
+                        : x.category}
+                  </td>
+                  <td>
+                    <Badge state={x.active ? "OK" : "CANCELLED"}>
+                      {x.active ? "Habilitado" : "Deshabilitado"}
                     </Badge>
                   </td>
                   <td>
-                    {tab === "users" && (
-                      <div className="actions">
-                        <Button
-                          onClick={() => {
-                            setForm(item);
-                            setModal("edit-user");
-                          }}
-                        >
-                          Permisos
-                        </Button>
-                        <Button
-                          onClick={() => {
-                            setForm({ id: item.id, password: "", confirm: "" });
-                            setModal("password");
-                          }}
-                        >
+                    <div className="actions">
+                      <Button onClick={() => open(tab, x)}>Editar</Button>
+                      {tab === "users" && (
+                        <Button onClick={() => open("password", { id: x.id })}>
                           Restablecer contraseña
                         </Button>
-                      </div>
-                    )}
-                    {tab === "catalog" && (
-                      <Button
-                        onClick={() => {
-                          const { code, name, method, category, active } = item;
-                          open("catalog", {
-                            code,
-                            name,
-                            method,
-                            category,
-                            active,
-                          });
-                        }}
-                      >
-                        Editar
-                      </Button>
-                    )}
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -236,145 +218,133 @@ export default function Admin() {
       {modal && (
         <Modal
           title={
-            modal === "users"
-              ? "Crear usuario"
-              : modal === "edit-user"
-                ? "Roles y proyectos"
-                : modal === "password"
-                  ? "Restablecer contraseña"
-                  : "Guardar registro"
+            modal === "password"
+              ? "Restablecer contraseña"
+              : (form.id ? "Editar " : "Crear ") +
+                (modal === "users"
+                  ? "usuario"
+                  : modal === "organizations"
+                    ? "empresa"
+                    : "ensayo")
           }
           onClose={() => setModal("")}
         >
           <form className="modal-body" onSubmit={save}>
             <ErrorBox>{error}</ErrorBox>
-            {!["edit-user", "password"].includes(modal) &&
-              field("name", "Nombre")}
-            {modal === "users" && field("email", "Correo electrónico", "email")}
-            {["users", "password"].includes(modal) &&
-              field(
-                "password",
-                "Contraseña (mínimo 15 caracteres)",
-                "password",
-              )}
-            {modal === "password" &&
-              field("confirm", "Repetir contraseña", "password")}
-            {["users", "projects", "edit-user"].includes(modal) && (
-              <Field label="Empresa">
-                <select
-                  required={
-                    modal === "projects" || form.roles?.includes("CLIENT")
-                  }
-                  value={form.organization_id || ""}
-                  onChange={(e) =>
-                    setForm(
-                      companySelection(
-                        modal,
-                        form,
-                        e.target.value,
-                        data.projects,
-                      ),
-                    )
-                  }
-                >
-                  <option value="">Seleccionar empresa</option>
-                  {data.organizations.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            )}
-            {["users", "edit-user"].includes(modal) && (
+            {modal !== "password" &&
+              field("name", "Nombre *", { required: true })}
+            {modal === "users" && (
               <>
-                <span className="field-label">Roles</span>
-                <div className="assay-chips">
-                  {["CLIENT", "TECH", "MANAGER", "ADMIN"].map((role) => (
-                    <label key={role}>
+                {field("email", "Correo electrónico *", {
+                  type: "email",
+                  required: true,
+                })}
+                {field("phone", "Teléfono (opcional)", {
+                  type: "tel",
+                  max: 30,
+                })}
+                <Field label="Empresa">
+                  <select
+                    value={form.organization_id || ""}
+                    required={form.roles.includes("CLIENT")}
+                    onChange={(e) => change("organization_id", e.target.value)}
+                  >
+                    <option value="">Sin empresa</option>
+                    {data.organizations
+                      .filter((o) => o.active || o.id === form.organization_id)
+                      .map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.name}
+                          {o.is_internal ? " · Interna" : ""}
+                        </option>
+                      ))}
+                  </select>
+                </Field>
+                <fieldset className="roles-field">
+                  <legend>Roles</legend>
+                  {["CLIENT", "TECH", "MANAGER", "ADMIN"].map((r) => (
+                    <label className="check-label" key={r}>
                       <input
                         type="checkbox"
-                        checked={form.roles.includes(role)}
+                        checked={form.roles.includes(r)}
                         onChange={(e) =>
-                          setForm({
-                            ...form,
-                            roles: e.target.checked
-                              ? [...form.roles, role]
-                              : form.roles.filter((r) => r !== role),
-                          })
+                          change(
+                            "roles",
+                            e.target.checked
+                              ? [...form.roles, r]
+                              : form.roles.filter((v) => v !== r),
+                          )
                         }
                       />
-                      {labels[role]}
+                      {labels[r]}
                     </label>
                   ))}
-                </div>
-                <span className="field-label">Proyectos asignados</span>
-                <div className="assay-chips">
-                  {data.projects
-                    .filter(
-                      (p) =>
-                        p.organization_id === form.organization_id &&
-                        (p.active || form.project_ids.includes(p.id)),
-                    )
-                    .map((p) => (
-                      <label key={p.id}>
-                        <input
-                          type="checkbox"
-                          checked={form.project_ids.includes(p.id)}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              project_ids: e.target.checked
-                                ? [...form.project_ids, p.id]
-                                : form.project_ids.filter((id) => id !== p.id),
-                            })
-                          }
-                        />
-                        {p.code}
-                      </label>
-                    ))}
-                </div>
-                {modal === "edit-user" && (
-                  <label className="check-label">
-                    <input
-                      type="checkbox"
-                      checked={form.active}
-                      onChange={(e) =>
-                        setForm({ ...form, active: e.target.checked })
-                      }
-                    />
-                    Cuenta habilitada
-                  </label>
-                )}
-                <p className="muted">
-                  Los cambios revocan las sesiones existentes. Las contraseñas
-                  nunca se muestran después de guardarlas.
-                </p>
+                </fieldset>
               </>
             )}
-            {modal === "organizations" &&
-              field("tax_id", "Identificación tributaria")}
-            {["projects", "catalog"].includes(modal) && field("code", "Código")}
-            {modal === "projects" && field("location", "Ubicación")}
-            {modal === "catalog" && (
+            {((modal === "users" && !form.id) || modal === "password") &&
+              field("password", "Contraseña (mínimo 15 caracteres)", {
+                type: "password",
+                required: true,
+                max: 128,
+              })}
+            {modal === "password" &&
+              field("confirm", "Repetir contraseña", {
+                type: "password",
+                required: true,
+                max: 128,
+              })}
+            {modal === "organizations" && (
               <>
-                {field("method", "Método / referencia")}
-                {field("category", "Categoría")}
+                {field("tax_id", "Identificación tributaria (opcional)", {
+                  max: 30,
+                })}
                 <label className="check-label">
                   <input
                     type="checkbox"
-                    checked={form.active}
-                    onChange={(e) =>
-                      setForm({ ...form, active: e.target.checked })
-                    }
+                    checked={form.is_internal}
+                    onChange={(e) => change("is_internal", e.target.checked)}
                   />
-                  Ensayo habilitado
+                  Es la empresa interna
                 </label>
+                <p className="muted">
+                  Solo puede haber una empresa interna. Sus clientes seleccionan
+                  proyectos de AppControlHH; las demás empresas usan solicitudes
+                  externas.
+                </p>
               </>
             )}
+            {modal === "catalog" && (
+              <>
+                {field("code", "Código *", { required: true, max: 30 })}
+                {field("method", "Método (opcional)")}
+                {field("category", "Categoría *", { required: true, max: 100 })}
+              </>
+            )}
+            {(modal === "organizations" ||
+              modal === "catalog" ||
+              (modal === "users" && form.id)) && (
+              <label className="check-label">
+                <input
+                  type="checkbox"
+                  checked={form.active}
+                  onChange={(e) => change("active", e.target.checked)}
+                />
+                {modal === "users"
+                  ? "Cuenta habilitada"
+                  : "Registro habilitado"}
+              </label>
+            )}
             <div className="form-actions">
-              <Button variant="primary" busy={busy}>
-                {modal === "users" ? "Crear usuario" : "Guardar"}
+              <Button onClick={() => setModal("")} type="button">
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                busy={busy}
+                disabled={modal === "users" && !form.roles.length}
+              >
+                Guardar registro
               </Button>
             </div>
           </form>

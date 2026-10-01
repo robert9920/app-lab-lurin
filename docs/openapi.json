@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Laboratorio Lara Consulting",
-    "version": "3.0.0",
-    "description": "Sesión opaca en cookie lab_session. Escrituras requieren Origin exacto y X-CSRF-Token de GET /session. ADMIN administra; MANAGER dirige; TECH solo consulta sus solicitudes, muestras y ensayos asignados; CLIENT accede por proyecto. Borradores exclusivos de su autor. En Azure, la clave de Functions se agrega exclusivamente en el proxy. version identifica la revisión de la solicitud. Los lotes de /work son transaccionales. Cada informe se hace visible al confirmar la carga."
+    "version": "4.0.0",
+    "description": "Sesión opaca en cookie lab_session. Escrituras requieren Origin exacto y X-CSRF-Token de GET /session. ADMIN administra; MANAGER dirige; TECH solo consulta sus solicitudes, muestras y ensayos asignados; CLIENT accede solo a sus propias solicitudes. Borradores exclusivos de su autor. En Azure, la clave de Functions se agrega exclusivamente en el proxy. version identifica la revisión de la solicitud. Los lotes de /work son transaccionales. Cada informe se hace visible al confirmar la carga."
   },
   "servers": [
     {
@@ -45,6 +45,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
@@ -104,6 +107,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": []
@@ -143,6 +149,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
@@ -199,6 +208,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": []
@@ -238,6 +250,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
@@ -270,10 +285,10 @@
         }
       }
     },
-    "/management/projects": {
-      "post": {
-        "operationId": "admin_projects_post",
-        "summary": "admin projects",
+    "/management/organizations/{id}": {
+      "put": {
+        "operationId": "edit_organization_put",
+        "summary": "edit organization",
         "responses": {
           "200": {
             "description": "Operación completada"
@@ -304,9 +319,21 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
           {
             "name": "Origin",
             "in": "header",
@@ -329,7 +356,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Project"
+                "$ref": "#/components/schemas/OrganizationEdit"
               }
             }
           }
@@ -370,6 +397,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
@@ -436,6 +466,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
@@ -511,6 +544,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
@@ -586,6 +622,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
@@ -652,9 +691,51 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
-        "parameters": []
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "requests",
+                "catalog"
+              ]
+            },
+            "description": "requests: códigos de solicitudes autorizadas; catalog: AppControlHH, solo CLIENT de empresa interna, respuesta paginada."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 30
+            }
+          }
+        ]
       }
     },
     "/catalog": {
@@ -691,6 +772,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": []
@@ -730,6 +814,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": []
@@ -769,6 +856,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
@@ -808,10 +898,11 @@
               "enum": [
                 "",
                 "NOT_RECEIVED",
-                "issues"
+                "issues",
+                "NO_OT"
               ]
             },
-            "description": "En view=reception, NOT_RECEIVED exige al menos una muestra sin recibir; issues exige material observado, dañado o insuficiente."
+            "description": "En view=reception, NOT_RECEIVED exige al menos una muestra sin recibir; issues material observado/dañado/insuficiente; NO_OT carece de OT. Incluye solicitudes enviadas sin ensayos; TECH solo aprobadas asignadas."
           },
           {
             "name": "page",
@@ -867,6 +958,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
@@ -911,6 +1005,68 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "project_id": {
+                      "type": "string",
+                      "description": "Código de catálogo o EXTERNO; no UUID/FK."
+                    },
+                    "status": {
+                      "enum": [
+                        "DRAFT",
+                        "WAITING_ASSAYS",
+                        "SUBMITTED",
+                        "OBSERVED",
+                        "APPROVED",
+                        "REJECTED",
+                        "CLOSED"
+                      ]
+                    },
+                    "can_edit": {
+                      "type": "boolean",
+                      "description": "Autor CLIENT antes de aprobación; declaración recibida protegida."
+                    },
+                    "is_internal": {
+                      "type": "boolean"
+                    },
+                    "district": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "province": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "department": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "easting": {
+                      "type": [
+                        "string",
+                        "number",
+                        "null"
+                      ],
+                      "description": "Opcional."
+                    },
+                    "northing": {
+                      "type": [
+                        "string",
+                        "number",
+                        "null"
+                      ],
+                      "description": "Opcional."
+                    },
+                    "codigo_ot": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "tasks": {
                       "type": "array",
                       "items": {
@@ -960,6 +1116,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
@@ -1007,6 +1166,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
@@ -1082,6 +1244,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
@@ -1157,6 +1322,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
@@ -1232,6 +1400,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
@@ -1307,6 +1478,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
@@ -1406,6 +1580,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
@@ -1512,6 +1689,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
@@ -1578,9 +1758,90 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": []
+      }
+    },
+    "/requests/{rid}/work-order": {
+      "post": {
+        "operationId": "work_order_post",
+        "summary": "work order",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
+          }
+        },
+        "parameters": [
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkOrder"
+              }
+            }
+          }
+        }
       }
     },
     "/requests/{rid}/reports": {
@@ -1617,6 +1878,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
@@ -1703,6 +1967,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
@@ -1791,6 +2058,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
@@ -1848,6 +2118,9 @@
           },
           "500": {
             "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
           }
         },
         "parameters": [
@@ -1915,6 +2188,13 @@
               "null"
             ]
           },
+          "codigo_ot": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "OT manual por solicitud; requisito de assign/start/resume, junto con aprobación y material cuando corresponda."
+          },
           "assigned": {
             "type": "boolean",
             "description": "Derivado de tecnico_id; no es un estado ni columna duplicada."
@@ -1931,7 +2211,7 @@
                 "cancel"
               ]
             },
-            "description": "Acciones autorizadas por rol, asignación, material y estado. La API valida de nuevo al ejecutar."
+            "description": "Acciones autorizadas por rol, asignación, OT, material y estado. assign/start/resume necesitan APPROVED y OT; RUNNING histórico admite observe/complete sin OT. La API valida de nuevo al ejecutar."
           }
         }
       },
@@ -1984,9 +2264,40 @@
             ],
             "maxLength": 60
           },
+          "quantity": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Sacos declarados, entero positivo o desconocido."
+          },
+          "weight": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Peso declarado en kg o desconocido; independiente de sacos."
+          },
+          "received_quantity": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ]
+          },
+          "received_weight": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Peso recibido en kg."
+          },
           "can_receive": {
             "type": "boolean",
-            "description": "Permiso operativo sobre la muestra; recibir requiere además solicitud aprobada."
+            "description": "Permiso operativo sobre la muestra; recibir requiere además solicitud enviada; TECH requiere aprobación y asignación."
           }
         }
       },
@@ -2026,6 +2337,16 @@
             "maxLength": 30,
             "title": "Tax Id",
             "type": "string"
+          },
+          "active": {
+            "default": true,
+            "title": "Active",
+            "type": "boolean"
+          },
+          "is_internal": {
+            "default": false,
+            "title": "Is Internal",
+            "type": "boolean"
           }
         },
         "required": [
@@ -2034,39 +2355,36 @@
         "title": "Organization",
         "type": "object"
       },
-      "Project": {
+      "OrganizationEdit": {
         "additionalProperties": false,
         "properties": {
-          "organization_id": {
-            "format": "uuid",
-            "title": "Organization Id",
-            "type": "string"
-          },
-          "code": {
-            "maxLength": 100,
-            "minLength": 2,
-            "title": "Code",
-            "type": "string"
-          },
           "name": {
-            "maxLength": 250,
-            "minLength": 3,
+            "maxLength": 200,
+            "minLength": 2,
             "title": "Name",
             "type": "string"
           },
-          "location": {
+          "tax_id": {
             "default": "",
-            "maxLength": 250,
-            "title": "Location",
+            "maxLength": 30,
+            "title": "Tax Id",
             "type": "string"
+          },
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "is_internal": {
+            "default": false,
+            "title": "Is Internal",
+            "type": "boolean"
           }
         },
         "required": [
-          "organization_id",
-          "code",
-          "name"
+          "name",
+          "active"
         ],
-        "title": "Project",
+        "title": "OrganizationEdit",
         "type": "object"
       },
       "UserCreate": {
@@ -2117,14 +2435,18 @@
             "title": "Roles",
             "type": "array"
           },
-          "project_ids": {
-            "items": {
-              "format": "uuid",
-              "type": "string"
-            },
-            "maxItems": 100,
-            "title": "Project Ids",
-            "type": "array"
+          "phone": {
+            "anyOf": [
+              {
+                "maxLength": 30,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Phone"
           }
         },
         "required": [
@@ -2139,6 +2461,30 @@
       "UserEdit": {
         "additionalProperties": false,
         "properties": {
+          "name": {
+            "maxLength": 200,
+            "minLength": 2,
+            "title": "Name",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "maxLength": 30,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Phone"
+          },
           "organization_id": {
             "anyOf": [
               {
@@ -2170,18 +2516,11 @@
           "active": {
             "title": "Active",
             "type": "boolean"
-          },
-          "project_ids": {
-            "items": {
-              "format": "uuid",
-              "type": "string"
-            },
-            "maxItems": 100,
-            "title": "Project Ids",
-            "type": "array"
           }
         },
         "required": [
+          "name",
+          "email",
           "roles",
           "active"
         ],
@@ -2247,6 +2586,19 @@
       "Sample": {
         "additionalProperties": false,
         "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
           "client_code": {
             "maxLength": 100,
             "minLength": 1,
@@ -2260,8 +2612,8 @@
             "type": "string"
           },
           "material": {
-            "default": "Suelo",
             "maxLength": 100,
+            "minLength": 1,
             "title": "Material",
             "type": "string"
           },
@@ -2302,6 +2654,19 @@
           "quantity": {
             "anyOf": [
               {
+                "exclusiveMinimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Quantity"
+          },
+          "weight": {
+            "anyOf": [
+              {
                 "exclusiveMinimum": 0.0,
                 "type": "number"
               },
@@ -2314,14 +2679,7 @@
               }
             ],
             "default": null,
-            "title": "Quantity"
-          },
-          "unit": {
-            "default": "kg",
-            "maxLength": 20,
-            "minLength": 1,
-            "title": "Unit",
-            "type": "string"
+            "title": "Weight"
           },
           "notes": {
             "default": "",
@@ -2335,14 +2693,13 @@
               "type": "string"
             },
             "maxItems": 40,
-            "minItems": 1,
             "title": "Assay Ids",
             "type": "array"
           }
         },
         "required": [
           "client_code",
-          "assay_ids"
+          "material"
         ],
         "title": "Sample",
         "type": "object"
@@ -2351,9 +2708,18 @@
         "additionalProperties": false,
         "properties": {
           "project_id": {
-            "format": "uuid",
-            "title": "Project Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Project Id"
           },
           "title": {
             "maxLength": 180,
@@ -2380,6 +2746,56 @@
             "default": null,
             "title": "Target Date"
           },
+          "district": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "District",
+            "type": "string"
+          },
+          "province": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Province",
+            "type": "string"
+          },
+          "department": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Department",
+            "type": "string"
+          },
+          "easting": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Easting"
+          },
+          "northing": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Northing"
+          },
           "samples": {
             "items": {
               "$ref": "#/components/schemas/Sample"
@@ -2391,8 +2807,10 @@
           }
         },
         "required": [
-          "project_id",
           "title",
+          "district",
+          "province",
+          "department",
           "samples"
         ],
         "title": "RequestCreate",
@@ -2407,9 +2825,18 @@
             "type": "integer"
           },
           "project_id": {
-            "format": "uuid",
-            "title": "Project Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Project Id"
           },
           "title": {
             "maxLength": 180,
@@ -2436,6 +2863,56 @@
             "default": null,
             "title": "Target Date"
           },
+          "district": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "District",
+            "type": "string"
+          },
+          "province": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Province",
+            "type": "string"
+          },
+          "department": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Department",
+            "type": "string"
+          },
+          "easting": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Easting"
+          },
+          "northing": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Northing"
+          },
           "samples": {
             "items": {
               "$ref": "#/components/schemas/Sample"
@@ -2448,8 +2925,10 @@
         },
         "required": [
           "version",
-          "project_id",
           "title",
+          "district",
+          "province",
+          "department",
           "samples"
         ],
         "title": "RequestEdit",
@@ -2522,6 +3001,19 @@
           "received_quantity": {
             "anyOf": [
               {
+                "exclusiveMinimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Received Quantity"
+          },
+          "received_weight": {
+            "anyOf": [
+              {
                 "exclusiveMinimum": 0.0,
                 "type": "number"
               },
@@ -2534,7 +3026,7 @@
               }
             ],
             "default": null,
-            "title": "Received Quantity"
+            "title": "Received Weight"
           },
           "reception_notes": {
             "default": "",
@@ -2812,6 +3304,34 @@
           "action"
         ],
         "title": "WorkUpdate",
+        "type": "object"
+      },
+      "WorkOrder": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "exclusiveMinimum": 0,
+            "title": "Version",
+            "type": "integer"
+          },
+          "codigo_ot": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Codigo Ot",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "maxLength": 3000,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "codigo_ot"
+        ],
+        "title": "WorkOrder",
         "type": "object"
       }
     }

@@ -18,6 +18,7 @@ export default function ReceptionForm({ request, onDone }) {
       codigo_laboratorio: s.codigo_laboratorio || "",
       condition: s.condition === "NOT_RECEIVED" ? "OK" : s.condition,
       received_quantity: s.received_quantity ?? "",
+      received_weight: s.received_weight ?? "",
       reception_notes: s.reception_notes,
     })),
   );
@@ -47,6 +48,8 @@ export default function ReceptionForm({ request, onDone }) {
               ...s,
               received_quantity:
                 s.received_quantity === "" ? null : Number(s.received_quantity),
+              received_weight:
+                s.received_weight === "" ? null : Number(s.received_weight),
             })),
         },
       );
@@ -123,6 +126,10 @@ export default function ReceptionForm({ request, onDone }) {
               <b>{original.client_code}</b> · {original.material}{" "}
               <Badge state={original.condition} />
             </label>
+            <p className="muted">
+              Declarado: {original.quantity ?? "Sin dato"} sacos ·{" "}
+              {original.weight ?? "Sin dato"} kg
+            </p>
             {original.received_at && (
               <p className="muted">
                 Última recepción:{" "}
@@ -155,16 +162,28 @@ export default function ReceptionForm({ request, onDone }) {
                     placeholder="M-26-024-001"
                   />
                 </Field>
-                <Field label={"Cantidad recibida (" + original.unit + ")"}>
+                <Field label="Sacos recibidos (opcional)">
                   <input
                     type="number"
-                    step="any"
-                    min="0.001"
+                    step="1"
+                    min="1"
                     value={s.received_quantity}
                     onChange={(e) =>
                       edit(s.sample_id, "received_quantity", e.target.value)
                     }
                     placeholder="Desconocida"
+                  />
+                </Field>
+                <Field label="Peso recibido (kg, opcional)">
+                  <input
+                    type="number"
+                    min="0.001"
+                    step="any"
+                    value={s.received_weight}
+                    onChange={(e) =>
+                      edit(s.sample_id, "received_weight", e.target.value)
+                    }
+                    placeholder="Desconocido"
                   />
                 </Field>
                 <Field label="Condición">

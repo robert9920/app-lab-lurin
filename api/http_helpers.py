@@ -44,7 +44,16 @@ def body(req, model):
             "email": "Correo",
             "password": "Contraseña",
             "roles": "Roles",
-            "project_ids": "Proyectos",
+            "project_id": "Proyecto",
+            "phone": "Teléfono",
+            "district": "Distrito",
+            "province": "Provincia",
+            "department": "Departamento",
+            "easting": "Coordenada este",
+            "northing": "Coordenada norte",
+            "title": "Nombre de solicitud",
+            "samples": "Muestras y ensayos",
+            "codigo_ot": "OT",
         }
         messages = []
         for issue in error.errors(include_input=False, include_context=False, include_url=False):

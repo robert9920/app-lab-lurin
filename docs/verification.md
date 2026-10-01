@@ -1,85 +1,55 @@
-# Verificación de la versión 3
+# Verificación · esquema 4
 
-Ejecutada el 9 de septiembre de 2026 (Lima), con datos ficticios y PostgreSQL real. No se desplegaron ni verificaron recursos Azure en esta entrega.
+Ejecutada el **1 de octubre de 2026**, hora de Lima, con PostgreSQL local y datos ficticios. No se publicaron paquetes ni se modificaron recursos o datos en Azure. La base local existente lab_lc_v3 y su local.settings.json privado se conservaron.
 
-## Resultados
+## Resultados ejecutados
 
 | Comprobación | Resultado |
 |---|---|
-| pytest, base independiente lab_lc_v3_test | 26 pruebas aprobadas |
-| Vitest | 4 pruebas aprobadas |
-| Playwright / Chrome | 4 recorridos aprobados (administración, navegación/recepción/informes, cliente y técnico) |
-| ESLint | Sin errores ni advertencias |
-| Ruff, código y pruebas del backend | Sin errores |
-| Vite build v3 | Compilación de producción correcta |
-| npm audit | 0 vulnerabilidades conocidas en la consulta de esta fecha |
-| Creación de esquema desde cero | lab_lc_v3 y lab_lc_v3_test creadas y cargadas con SQL 01/02/03 |
-| Contratos | 13 tablas, 92 campos documentados y 25 rutas OpenAPI |
-| Diagrama Mermaid/SVG | Regenerado desde PostgreSQL y revisado visualmente |
-| Etiquetas | PDF A4; medidas de 95×68 mm comprobadas en operadores PDF; 1, 8 y 9 etiquetas verificadas |
-| Revisión visual | Cliente, ficha, dashboard técnico, estados, paginación, PDF de dos páginas y nombre de cliente extenso |
+| Backend / pytest | **36 pruebas aprobadas** en lab_lc_v4_unit_test; transacciones rollback. |
+| Frontend / Vitest | **8 pruebas aprobadas**, incluidos pegado con calicata vacía, campos opcionales y payloads explícitos. |
+| Chrome / Playwright | **7 recorridos aprobados**, contra API Functions real 7072 y Vite 5174 en entorno separado. |
+| Ruff / ESLint | Sin errores ni advertencias de lint. |
+| Vite producción | Build correcto; 1826 módulos, CSS y JS generados. |
+| Servidor construido | Arranque en NODE_ENV=production, healthz, recarga de ruta SPA y cabeceras comprobados sin llamar Azure. |
+| Publicación y limpieza | 26 archivos admitidos por el filtro .funcignore, incluido services/projects.py y certificados públicos; sin settings privados, entornos ni pruebas. Retiradas 26 carpetas de caché/copia temporal; fuentes, dependencias, dist y PDF reales conservados. |
+| Esquema nuevo | SQL 01/02/03 sobre bases ficticias vacías; once tablas. |
+| Migración SQL 05 | Versión 3→4; conservación de IDs, empresa y código antiguo; cantidades no convertidas; pesos nuevos NULL. |
+| Fallo de migración | Sacos fraccionarios abortan; rollback deja versión3 sin columnas nuevas. Repetir 05 después de éxito es rechazado. |
+| Coherencia | Columnas/tipos/nulabilidad/defaults de migración idénticos a instalación limpia; README con **94 campos**, Mermaid/SVG y **26 rutas** OpenAPI. |
+| Catálogo AppControlHH | Consulta real de solo lectura en local: nueve proyectos; búsqueda por código sin distinguir mayúsculas y validación al crear en el recorrido. Búsqueda por nombre y fallo de origen cubiertos en backend. |
+| PDF / visual | Acta con sacos y peso recibidos separados, etiqueta y diagrama renderizados e inspeccionados. Dimensiones/paginación 1/8/9 etiquetas e IDs autorizados cubiertos por backend. |
+| Dependencias Python | pip-audit de versiones fijadas: sin vulnerabilidades conocidas en esta consulta. |
+| Dependencias Node | npm audit: **dos paquetes con avisos**; uno en desarrollo y uno en producción, descritos abajo. |
 
-La ejecución inicial encontró restricciones del entorno del agente al crear temporales o iniciar procesos auxiliares. La ejecución ampliada autorizada permitió completar las verificaciones; no queda un bloqueo de aprobación pendiente. Poppler emitió un aviso sobre su fuente Symbol de sustitución, pero produjo las imágenes de revisión y los textos utilizados en las etiquetas se renderizaron correctamente.
+Bases creadas solo para esta entrega: lab_lc_v4_test (recorridos), lab_lc_v4_unit_test (unitarias) y lab_lc_v4_migration_test (actualización aislada). Se pueden eliminar posteriormente sin afectar lab_lc_v3 ni AppControlHH. AppControlHH solo se leyó; no se añadieron proyectos ni permisos en esa base.
 
-## Cobertura comprobada
+## Cobertura
 
-- Borrador visible solo al autor; denegación para administrador, jefatura, técnico y otro cliente incluso dentro del mismo proyecto.
-- Creación de solicitudes exclusiva de CLIENT; trabajador con CLIENT adicional puede redactar sin adquirir permisos operativos sobre ensayos ajenos.
-- Dos técnicos en una misma solicitud: proyección de ensayos y muestras, recepción, historial, dashboard, filtros manipulados y PDF autorizados. Retirar la asignación revoca el acceso a informes de esa solicitud.
-- Recepción parcial, correcciones con motivo, preservación de identidad e historial, códigos normalizados y rechazo de código de laboratorio duplicado.
-- Filtro NOT_RECEIVED excluye solicitudes cuyo material pendiente de atender ya se recibió observado; dashboard y lista coinciden en su definición.
-- Asignar mantiene PENDING. No se observa/completa antes del inicio. Retomar solo por jefatura y conservando la fecha inicial. Sin acciones posteriores a completar/cancelar.
-- Una segunda solicitud incompatible revierte la asignación y versión de la primera dentro de un lote; rechazo de versiones obsoletas.
-- Informe inmediato, versiones distintas, comprobaciones de PDF y descarga denegada fuera del proyecto o asignación.
-- Métricas conciliadas contra SQL con más de 100 solicitudes, exclusión de cancelados, vencidos y ocho semanas de completados.
-- Alta/restablecimiento de usuarios, Argon2id, revocación, caducidad, CSRF, origen y límite persistente de intentos.
-- Navegación directa, recarga y regreso con filtros; acciones del técnico y contraste de botones del cliente superior al mínimo comprobado de 4,5:1.
+- Cuentas manuales, edición de nombre/correo/teléfono/empresa/roles/activo, contraseña y revocación; último administrador protegido; empresa interna única y editable.
+- Solicitudes propias del cliente, borradores privados y dos técnicos compartiendo solicitud: muestras/ensayos, recepción, documentos, actas, etiquetas, historial y métricas según asignación.
+- Solicitud interna con **33 muestras**, envío sin ensayos y coordenadas vacías. Recepción parcial insuficiente con sacos/peso; OT manual antes de recepción completa; agregar ensayos conserva IDs, cantidad declarada y peso recibido. Aprobación y asignación posteriores, PDF inmediatamente disponible.
+- Solicitud externa sin selector; código EXTERNO impuesto en servidor. Códigos forjados, muestras de otra solicitud, transiciones inválidas y conflicto de versión rechazados.
+- OT bloquea asignar/iniciar/retomar nuevos; material no conforme bloquea ejecución. Observar/completar trabajos históricos ya iniciados no requiere inventar una OT. Lotes incompatibles revierten de forma atómica.
+- Dashboard y filtro NOT_RECEIVED concuerdan sobre recepciones pendientes, incluidos envíos WAITING_ASSAYS; agregado sobre más de cien solicitudes y límites del técnico.
+- Navegación directa, recarga y regreso con filtros; contraste del inicio cliente; tabla horizontal, paneles derechos, paginadores y vista de tablet. Datos de PDF renderizados legibles; no se probó una impresora física.
+- manage.py migrate acepta esquema4 sin reinstalar ni cambiar solicitudes existentes. scripts/verify_migration.py permite repetir la comprobación SQL únicamente sobre una base ficticia vacía prevista, nunca elimina datos existentes.
 
-Las capturas y PDF de revisión son ficticios y están en `.local/review`, fuera del código desplegable. Las pruebas E2E requieren credenciales privadas explícitas; sin ellas se omiten, nunca deben reportarse como ejecutadas.
+Las primeras ejecuciones necesitaron permisos ampliados del entorno para temporales/procesos auxiliares. Hubo ajustes a las esperas y selectores de pruebas E2E durante el desarrollo; el resultado final es siete aprobadas. Poppler avisó de su fuente Symbol de sustitución; acta y etiqueta se renderizaron y sus textos se inspeccionaron correctamente. No hay un bloqueo actual de aprobación pendiente.
 
-## Estado local y pasos del usuario
+## Avisos de dependencias, sin cambios de versión
 
-Se preparó `lab_lc_v3` en la instancia PostgreSQL local indicada por la configuración existente y se actualizó únicamente la base de destino en `api/local.settings.json`. No se migraron registros ni se eliminaron las bases anteriores. La instancia separada del agente usó el puerto 55432 para pruebas; ese puerto no es un requisito de la aplicación.
+- **brace-expansion 1.1.18**, transitiva de ESLint/minimatch: aviso de severidad alta en herramientas de desarrollo.
+- **ip-address 10.7.0**, transitiva de express-rate-limit 8.7.0: aviso moderado presente también con `npm audit --omit=dev`.
 
-La base nueva contiene datos ficticios y cuentas sin contraseña inicializada. Desde la ventana Anaconda del backend:
+No se aplicó actualización automática ni se cambió el servidor proxy/dependencias de producción, conforme al alcance solicitado. Estos avisos siguen pendientes de una actualización separada y validada; la auditoría no equivale a certificar seguridad ni demuestra que la aplicación sea explotable. La entrega no afirma cero vulnerabilidades Node. Reconsultar audit antes de publicar, pues los avisos cambian.
 
-```bat
-conda activate lab-lc
-cd /d C:\Trabajo\Laboratorio\App\app-lab-lc\api
-python manage.py password --email admin@example.com
-func start
-```
+## Pendiente en los recursos reales
 
-Usa el nombre real de tu entorno si difiere de `lab-lc`. Detén primero el servidor anterior con Ctrl+C. Reinicia el frontend con `npm run dev` en su ventana. Las cuentas y contraseñas de bases anteriores no se trasladan automáticamente. El administrador nuevo puede crear cuentas o inicializar las otras cuentas ficticias desde la plataforma.
+Aplicar SQL05 con respaldo/mantenimiento en lab_lc y lab_lc_v3, configurar PROJECTS_DATABASE_URL privado y permisos SELECT reales, marcar empresa interna y desplegar ambos paquetes. Comprobar allí TLS/CA, conectividad a AppControlHH, login/cookies/CSRF, carga y descarga Blob con identidad administrada, red privada cuando corresponda y restauración coordinada PostgreSQL/PDF. Las pruebas locales no verifican esos recursos Azure.
 
-## Límites de esta verificación
+## Reproducción
 
-No se probó una impresora física: seleccionar A4, tamaño real/100 % y confirmar los márgenes de la impresora. No se aplicaron permisos de un rol runtime de producción ni se validaron Blob, certificados, red, respaldos/restauración o despliegue real en Azure. La guía de producción describe esos pasos. No se modificaron las dependencias Python; su auditoría de vulnerabilidades no se repitió en esta revisión.
+Pruebas unitarias: preparar una base ficticia vacía con 01/02/03, configurar TEST_DATABASE_URL privado (nombre permitido: lab_lc_v4_unit_test) y ejecutar pytest desde api. No utilizar lab_lc ni lab_lc_v3. Frontend: npm run lint, npm test, npm run build. E2E: LAB_E2E_URL y contraseñas ficticias en LAB_E2E_PASSWORD / LAB_E2E_CLIENT_PASSWORD / LAB_E2E_TECH_PASSWORD; npm run test:e2e desde client, con catálogo origen accesible.
 
-
-## Revisión de administración y producción · 11/09/2026
-
-Esta revisión complementa la evidencia anterior. No se desplegaron recursos Azure ni se modificaron bases de trabajo del usuario.
-
-| Comprobación ejecutada | Resultado |
-|---|---|
-| Base nueva aislada | lab_lc_release_test, PostgreSQL 17 en 127.0.0.1:55432; 01/02/03 instalados desde cero, 13 tablas |
-| Backend pytest | 29 pruebas aprobadas: sesiones, alcance de proyectos/técnicos, borradores, transiciones, recepción, PDF y administración |
-| Frontend Vitest | 6 pruebas aprobadas; incluye payload de proyecto sin campos extra y selección inicial editable por empresa |
-| Navegador Chrome, frontend construido + Functions | 2 pruebas aprobadas: crear/restablecer cuenta y login; crear proyecto con cuatro campos, comprobar preselección y desmarcar |
-| Lint | ESLint y Ruff sin errores |
-| Build | Vite completado; frontend servido con server.mjs, sin usar servidor de desarrollo |
-| Auditorías | npm audit y pip-audit sin vulnerabilidades conocidas reportadas |
-| Rol runtime en base aislada | SELECT catálogo e INSERT usuarios/informes permitidos; UPDATE actividad y CREATE en public denegados |
-| Paquetes | Patrones de exclusión comprobados con casos de secretos/cachés; archivos requeridos y CA pública presentes |
-| Servidor construido | /healthz y recarga de URL interna respondieron correctamente; proxy ejercitado en las pruebas de navegador |
-| Certificados públicos | Dos CA descargadas de emisores oficiales por HTTPS; CA=true, firma propia y fechas comprobadas; huellas en api/certs/README.md |
-| Revisión visual | Modal de alta revisado en captura: empresa, proyectos preseleccionados y exclusión manual legibles |
-
-Se corrigió el campo project_ids inesperado del formulario de proyectos, se introdujo una lista explícita de campos para altas y mensajes seguros que identifican el campo inválido. La creación de proyectos inserta membresías de su empresa en la misma transacción y audita los usuarios asignados. No se modifica la estructura de las 13 tablas ni se requiere migración de datos local; Mermaid conserva su validez.
-
-Durante la ejecución, el aislamiento de Windows bloqueó inicialmente esbuild, directorios temporales de pip-audit y procesos de revisión. Las comprobaciones se repitieron mediante ejecución autorizada y finalizaron. Una prueba de navegador falló por codificación de sus textos; se corrigió UTF-8 y ambas pruebas finalizaron correctamente.
-
-Pendiente en Azure: comprobar compilación remota Linux/Oryx, PM2 provisto por App Service, indexación de Functions en Flex, VPN/DNS privado, rutas de certificados montados, RBAC/Blob, conexión PostgreSQL TLS, alertas y restauración real. Las pruebas locales no validan esos recursos. B1/Flex se documentan sin slots; conservar paquetes para reversión.
-
-La inspección anterior de lab_lc_v3 mostró cero sesiones en ese momento e inicios de la cuenta manual en actividad. La prueba nueva confirma inserción durante login y eliminación al logout; no atribuye retrospectivamente la ausencia observada a una causa específica.
+Para SQL05: crear lab_lc_v4_migration_test vacía, configurar TEST_MIGRATION_DATABASE_URL y ejecutar python scripts/verify_migration.py desde la raíz. El comprobador deja los registros ficticios verificados y rehúsa una base ya usada; preparar otra instalación vacía bajo ese nombre para repetir. No hay contraseñas universales en SQL ni en pruebas.

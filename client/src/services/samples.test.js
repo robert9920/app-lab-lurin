@@ -1,18 +1,55 @@
 import { describe, it, expect } from "vitest";
-import { parseSamples, prepareSample } from "./samples";
-describe("Ingreso de muestras", () => {
-  it("preserva códigos, cantidades desconocidas y ceros al pegar Excel", () => {
-    const [s] = parseSamples(
-      "M-01\tDH-01\t0\t2.5\t\tkg\tMuestra sin masa informada",
-    );
+import {
+  blankSample,
+  parseSamples,
+  prepareSample,
+  sampleErrors,
+} from "./samples";
+describe("Muestras horizontales", () => {
+  it("separa sacos y kg y mantiene desconocidos y profundidad cero", () => {
+    const [s] = parseSamples("DH-01\tM-01\t0\t2.5\tSuelo\t\t15.4\tNota");
     const r = prepareSample(s);
     expect(r.client_code).toBe("M-01");
     expect(r.depth_from).toBe(0);
     expect(r.depth_to).toBe(2.5);
     expect(r.quantity).toBeNull();
+    expect(r.weight).toBe(15.4);
     expect(r.assay_ids).toEqual([]);
+    expect(r).not.toHaveProperty("unit");
   });
-  it("lee varias filas sin tratarlas como un ensayo individual", () => {
-    expect(parseSamples("A\tS1\r\nB\tS2")).toHaveLength(2);
+  it("conserva la calicata vacía al pegar columnas opcionales", () => {
+    const [s] = parseSamples("\tM-02\t\t\tRelaves\t2\t\t");
+    expect(s.borehole).toBe("");
+    expect(s.client_code).toBe("M-02");
+    expect(s.material).toBe("Relaves");
+    expect(s.quantity).toBe("2");
+    expect(s.weight).toBe("");
+  });
+  it("envía el ID para conservar recepciones y excluye metadatos de servidor", () => {
+    const r = prepareSample({
+      ...blankSample(),
+      id: "id",
+      received_at: "date",
+      client_code: "M",
+      material: "Suelo",
+    });
+    expect(r.id).toBe("id");
+    expect(r).not.toHaveProperty("received_at");
+  });
+  it("valida campos obligatorios, duplicados, sacos enteros y profundidades", () => {
+    const s = {
+      ...blankSample(),
+      client_code: "M",
+      material: "Suelo",
+      quantity: "1.5",
+      depth_from: "3",
+      depth_to: "2",
+    };
+    const e = sampleErrors(s, [s, s]);
+    expect(e.client_code).toBeTruthy();
+    expect(e.quantity).toBeTruthy();
+    expect(e.depth_to).toBeTruthy();
+    const good = { ...blankSample(), client_code: "A", material: "Relaves" };
+    expect(sampleErrors(good, [good])).toEqual({});
   });
 });

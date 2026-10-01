@@ -18,3 +18,7 @@ manage.py
 **/*.key
 **/*.pfx
 **/*.p12
+**/*.pyc
+**/*.pyo
+**/.cache/**
+**/.vite/**

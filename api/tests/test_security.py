@@ -22,7 +22,6 @@ def test_admin_creation_login_reset_disable_and_csrf(db, users):
             "password": password,
             "roles": ["CLIENT"],
             "organization_id": "10000000-0000-0000-0000-000000000001",
-            "project_ids": ["30000000-0000-0000-0000-000000000001"],
         },
         headers=admin,
     )
@@ -48,7 +47,13 @@ def test_admin_creation_login_reset_disable_and_csrf(db, users):
         invoke(
             "edit_user",
             "PUT",
-            {"roles": ["CLIENT"], "active": False, "project_ids": []},
+            {
+                "name": user["name"],
+                "email": user["email"],
+                "organization_id": str(user["organization_id"]),
+                "roles": ["CLIENT"],
+                "active": False,
+            },
             route={"id": uid},
             headers=admin,
         ).status_code
