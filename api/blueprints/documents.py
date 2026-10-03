@@ -11,6 +11,7 @@ from security import laboratory_access, request_access, require_role, scope_para
 from services import documents as d
 from services import storage
 from services.common import audit, touch
+from services.filters import request_filters
 from services.workflow import detail, require_approved
 
 bp = func.Blueprint()
@@ -77,18 +78,23 @@ def reports(db, req):
         SCOPE
         + " AND (:project='' OR r.proyecto_id::text=:project) AND (:request='' OR r.id::text=:request) AND (r.codigo ILIKE :q OR r.proyecto_id ILIKE :q OR r.titulo ILIKE :q)"
     )
+    params = {
+        **scope_params(u),
+        "project": req.params.get("project", ""),
+        "request": req.params.get("request", ""),
+        "q": "%" + req.params.get("q", "")[:150] + "%",
+    }
+    extra = []
+    request_filters(req, extra, params)
+    if extra:
+        where += " AND " + " AND ".join(extra)
     return page_result(
         db,
         req,
-        "SELECT d.id,d.solicitud_id,d.version,d.nombre,d.tamano_bytes,d.creado_en,r.codigo request_code,r.proyecto_id project_code,u.nombre uploaded_by_name",
-        "FROM informes d JOIN solicitudes r ON r.id=d.solicitud_id JOIN usuarios u ON u.id=d.subido_por",
+        "SELECT d.id,d.solicitud_id,d.version,d.nombre,d.tamano_bytes,d.creado_en,r.codigo request_code,r.proyecto_id project_code,u.nombre uploaded_by_name,author.nombre requester_name,org.nombre organization_name",
+        "FROM informes d JOIN solicitudes r ON r.id=d.solicitud_id JOIN usuarios u ON u.id=d.subido_por JOIN usuarios author ON author.id=r.creado_por JOIN empresas org ON org.id=r.empresa_id",
         where,
-        {
-            **scope_params(u),
-            "project": req.params.get("project", ""),
-            "request": req.params.get("request", ""),
-            "q": "%" + req.params.get("q", "")[:150] + "%",
-        },
+        params,
         "d.creado_en DESC,d.id",
     )
 

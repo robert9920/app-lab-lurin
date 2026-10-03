@@ -63,6 +63,57 @@ class RequestEdit(RequestCreate, Version):
     pass
 
 
+class SampleAssays(Model):
+    sample_id: UUID
+    assay_ids: list[UUID] = Field(max_length=40)
+
+    @field_validator("assay_ids")
+    @classmethod
+    def unique_assays(cls, values):
+        if len(values) != len(set(values)):
+            raise ValueError("Ensayos duplicados")
+        return values
+
+
+class AssaysEdit(Version):
+    samples: list[SampleAssays] = Field(min_length=1, max_length=200)
+
+
+class AssayDecision(Model):
+    task_id: UUID
+    decision: Literal["APPROVED", "REJECTED"]
+    reason: str = Field(default="", max_length=3000)
+
+    @model_validator(mode="after")
+    def rejection_reason(self):
+        if self.decision == "REJECTED" and not self.reason:
+            raise ValueError("Indica el motivo del rechazo")
+        return self
+
+
+class AssaysReview(Version):
+    decisions: list[AssayDecision] = Field(min_length=1, max_length=200)
+
+
+class AssaysResubmit(Version):
+    task_ids: list[UUID] = Field(min_length=1, max_length=200)
+
+
+def validate_coordinates(data, previous=None):
+    # Historical values remain readable; validate only newly supplied/changed values.
+    from errors import AppError
+
+    for field, lower, upper, label in (
+        ("easting", 100000, 1000000, "Coordenadas Este: debe tener seis dígitos enteros"),
+        ("northing", 1000000, 10000000, "Coordenadas Norte: debe tener siete dígitos enteros"),
+    ):
+        value = getattr(data, field)
+        if previous is not None and value == previous[field]:
+            continue
+        if value is not None and not lower <= value < upper:
+            raise AppError(400, label + "; se permiten decimales.")
+
+
 class Action(Version):
     action: Literal["submit", "approve", "observe", "reject", "close"]
     reason: str = Field(default="", max_length=3000)

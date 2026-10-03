@@ -1,3 +1,4 @@
+import { useNetworkBusy } from "../services/api";
 import { X, LoaderCircle, Inbox, ArrowUpRight } from "lucide-react";
 import { cloneElement, isValidElement, useId } from "react";
 export const labels = {
@@ -62,11 +63,17 @@ export function Empty({ children = "Todavía no hay registros." }) {
     </div>
   );
 }
-export function ErrorBox({ children }) {
+export function ErrorBox({ children, inline = false }) {
+  const Tag = inline ? "small" : "div";
+  const message = children?.message ?? children;
   return children ? (
-    <div role="alert" className="error-box">
-      {children}
-    </div>
+    <Tag
+      key={children?.id ?? message}
+      role="alert"
+      className={`${inline ? "cell-error" : "error-box"} transient-error`}
+    >
+      {message}
+    </Tag>
   ) : null;
 }
 export function Modal({ title, children, onClose }) {
@@ -126,3 +133,55 @@ export const fmtDate = (value) =>
         new Date(value.length === 10 ? `${value}T12:00:00-05:00` : value),
       )
     : "Sin fecha";
+
+export function Loading({ children = "Cargando…", compact = false }) {
+  return (
+    <div
+      className={`loading-state ${compact ? "compact" : ""}`}
+      role="status"
+      aria-live="polite"
+    >
+      <LoaderCircle className="spin" size={20} aria-hidden="true" />
+      <span>{children}</span>
+    </div>
+  );
+}
+export function NetworkLoading() {
+  const busy = useNetworkBusy();
+  return busy ? (
+    <div className="network-loading">
+      <Loading compact>Actualizando información…</Loading>
+    </div>
+  ) : null;
+}
+export function RequestBadges({ request }) {
+  return (
+    <div className="status-stack">
+      <Badge state={request.status} />
+      {request.status === "WAITING_ASSAYS" && request.unapproved_count > 0 && (
+        <Badge state="SUBMITTED" />
+      )}
+      {(request.pending_assays || request.undefined_samples > 0) &&
+        request.status !== "WAITING_ASSAYS" && (
+          <Badge state="WAITING_ASSAYS">Ensayos pendientes de definir</Badge>
+        )}
+      {request.unapproved_count > 0 && request.status === "APPROVED" && (
+        <Badge state="PENDING">{request.unapproved_count} por aprobar</Badge>
+      )}
+    </div>
+  );
+}
+
+export function ClearFilters({ setParams, onClear }) {
+  return (
+    <Button
+      type="button"
+      onClick={() => {
+        setParams(new URLSearchParams(), { replace: true });
+        onClear();
+      }}
+    >
+      Borrar filtros
+    </Button>
+  );
+}

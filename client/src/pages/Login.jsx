@@ -1,3 +1,4 @@
+import useErrorNotice from "../hooks/useErrorNotice";
 import { useState } from "react";
 import { FlaskConical } from "lucide-react";
 import { api, messageOf } from "../services/api";
@@ -7,7 +8,7 @@ export default function Login() {
   const { accept } = useAuth();
   const [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
-    [error, setError] = useState(""),
+    [error, setError] = useErrorNotice(),
     [busy, setBusy] = useState(false);
   async function submit(e) {
     e.preventDefault();

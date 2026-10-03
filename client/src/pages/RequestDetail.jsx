@@ -1,3 +1,4 @@
+import useErrorNotice from "../hooks/useErrorNotice";
 import { useState, useEffect } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, messageOf, download, fetchPdf } from "../services/api";
@@ -5,6 +6,8 @@ import { useAuth } from "../context/AuthContext";
 import { safeReturn } from "../services/navigation";
 import {
   PageHead,
+  Loading,
+  RequestBadges,
   Badge,
   Button,
   Field,
@@ -13,6 +16,7 @@ import {
   fmtDate,
 } from "../components/ui";
 import WorkOrderForm from "../components/WorkOrderForm";
+import AssaysReview from "../components/AssaysReview";
 import ReceptionForm from "../components/ReceptionForm";
 import WorkPanel from "../components/WorkPanel";
 import ReportUpload from "../components/ReportUpload";
@@ -21,12 +25,14 @@ export default function RequestDetail() {
     { user } = useAuth(),
     [params, setParams] = useSearchParams();
   const [r, setR] = useState(null),
-    [error, setError] = useState(""),
+    [error, setError] = useErrorNotice(),
     [busy, setBusy] = useState(false),
     [reason, setReason] = useState(""),
     [comment, setComment] = useState(""),
     [internal, setInternal] = useState(false),
     [labelIds, setLabelIds] = useState([]);
+  const [reviewOpen, setReviewOpen] = useState(false),
+    [loading, setLoading] = useState(true);
   const staff = user.roles.some((x) => ["TECH", "MANAGER"].includes(x)),
     manager = user.roles.includes("MANAGER"),
     canWrite = staff || user.roles.includes("CLIENT"),
@@ -38,6 +44,7 @@ export default function RequestDetail() {
     : "summary";
   useEffect(() => {
     let active = true;
+    setLoading(true);
     api
       .get("/requests/" + id)
       .then((x) => {
@@ -45,11 +52,14 @@ export default function RequestDetail() {
       })
       .catch((e) => {
         if (active) setError(messageOf(e));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
       });
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [id, setError]);
   async function act(action) {
     setBusy(true);
     setError("");
@@ -105,6 +115,14 @@ export default function RequestDetail() {
         ← Volver a la lista
       </Link>
       <ErrorBox>{error}</ErrorBox>
+      {reviewOpen && r && (
+        <AssaysReview
+          key={r.version}
+          request={r}
+          onDone={setR}
+          onClose={() => setReviewOpen(false)}
+        />
+      )}
       {r ? (
         <>
           <PageHead
@@ -116,7 +134,7 @@ export default function RequestDetail() {
               [r.district, r.province, r.department].filter(Boolean).join(", ")
             }
           >
-            <Badge state={r.status} />
+            <RequestBadges request={r} />
           </PageHead>
           <div className="tabs">
             {[
@@ -153,9 +171,11 @@ export default function RequestDetail() {
               <>
                 <div className="summary-heading">
                   <h2>Solicitud y muestras</h2>
-                  {r.can_edit && (
+                  {(r.can_edit || r.can_edit_assays) && (
                     <Link className="btn" to={"/requests/" + id + "/edit"}>
-                      Editar solicitud
+                      {r.can_edit_assays
+                        ? "Solicitar ensayos"
+                        : "Editar solicitud"}
                     </Link>
                   )}
                 </div>
@@ -257,15 +277,21 @@ export default function RequestDetail() {
                       >
                         Rechazar
                       </Button>
+                    </>
+                  )}
+                  {manager &&
+                    ["WAITING_ASSAYS", "SUBMITTED", "APPROVED"].includes(
+                      r.status,
+                    ) &&
+                    r.unapproved_count > 0 && (
                       <Button
                         busy={busy}
                         variant="primary"
-                        onClick={() => act("approve")}
+                        onClick={() => setReviewOpen(true)}
                       >
-                        Aprobar
+                        Revisar ensayos ({r.unapproved_count})
                       </Button>
-                    </>
-                  )}
+                    )}
                   {manager && r.status === "APPROVED" && (
                     <Button busy={busy} onClick={() => act("close")}>
                       Cerrar servicio
@@ -489,7 +515,7 @@ export default function RequestDetail() {
           </section>
         </>
       ) : (
-        !error && <p>Cargando solicitud…</p>
+        loading && <Loading>Cargando solicitud…</Loading>
       )}
     </>
   );

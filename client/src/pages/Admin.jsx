@@ -1,8 +1,10 @@
+import useErrorNotice from "../hooks/useErrorNotice";
 import { useEffect, useState, useCallback } from "react";
 import { Plus, Users, Building2, TestTubes } from "lucide-react";
 import { api, messageOf } from "../services/api";
 import {
   PageHead,
+  Loading,
   Button,
   Field,
   Modal,
@@ -15,16 +17,17 @@ export default function Admin() {
     [tab, setTab] = useState("users"),
     [modal, setModal] = useState(""),
     [form, setForm] = useState({}),
-    [error, setError] = useState(""),
+    [error, setError] = useErrorNotice(),
     [busy, setBusy] = useState(false);
-  const refresh = useCallback(
-    () =>
-      api
-        .get("/management/data")
-        .then((r) => setData(r.data))
-        .catch((e) => setError(messageOf(e))),
-    [],
-  );
+  const [loading, setLoading] = useState(true);
+  const refresh = useCallback(() => {
+    setLoading(true);
+    return api
+      .get("/management/data")
+      .then((r) => setData(r.data))
+      .catch((e) => setError(messageOf(e)))
+      .finally(() => setLoading(false));
+  }, [setError]);
   useEffect(() => {
     refresh();
   }, [refresh]);
@@ -120,7 +123,17 @@ export default function Admin() {
       </Field>
     );
   }
-  if (!data) return <ErrorBox>{error}</ErrorBox>;
+  if (!data)
+    return (
+      <>
+        <ErrorBox>{error}</ErrorBox>
+        {loading ? (
+          <Loading>Cargando administración…</Loading>
+        ) : (
+          <Button onClick={refresh}>Reintentar consulta</Button>
+        )}
+      </>
+    );
   return (
     <>
       <PageHead

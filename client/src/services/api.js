@@ -1,3 +1,20 @@
+import { useSyncExternalStore } from "react";
+let pending = 0;
+const listeners = new Set();
+const notify = () => listeners.forEach((fn) => fn());
+const subscribe = (fn) => {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+};
+export const useNetworkBusy = () =>
+  useSyncExternalStore(subscribe, () => pending > 0);
+function done(config) {
+  if (config?._tracked) {
+    config._tracked = false;
+    pending = Math.max(0, pending - 1);
+    notify();
+  }
+}
 import axios from "axios";
 let csrf = "";
 export function setCsrf(value) {
@@ -9,12 +26,19 @@ export const api = axios.create({
   timeout: 60000,
 });
 api.interceptors.request.use((config) => {
+  config._tracked = true;
+  pending += 1;
+  notify();
   if (config.method !== "get" && csrf) config.headers["X-CSRF-Token"] = csrf;
   return config;
 });
 api.interceptors.response.use(
-  (r) => r,
+  (r) => {
+    done(r.config);
+    return r;
+  },
   (error) => {
+    done(error.config);
     if (
       error.response?.status === 401 &&
       !error.config?.url?.startsWith("/auth/login")

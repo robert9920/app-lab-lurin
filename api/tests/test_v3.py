@@ -323,7 +323,7 @@ def test_label_geometry_pages_content(db, users, count, pages):
     assert len(doc.pages) == pages
     text = "".join(p.extract_text() for p in doc.pages)
     assert text.count("LARA CONSULTING") == count and text.count("MUESTRA DE LABORATORIO") == count
-    assert "12.45" in text and "13.00 m" in text and "UR origen" not in text and "OT:" not in text
+    assert "12.45" in text and "13.00 m" in text and "UR origen" not in text and "OT: OT-DEMO-001" in text
     assert abs(float(doc.pages[0].mediabox.width) - 210 * mm) < 0.1
     # PDF rectangle operators retain exact physical label size.
     from pypdf.generic import ContentStream

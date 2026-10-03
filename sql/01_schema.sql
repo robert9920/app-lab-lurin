@@ -1,4 +1,4 @@
--- Versión 4: instalar exclusivamente en una base NUEVA y vacía.
+-- Versión 6: instalar exclusivamente en una base NUEVA y vacía.
 BEGIN;
 CREATE TABLE migraciones_esquema (version integer PRIMARY KEY, aplicado_en timestamptz NOT NULL DEFAULT now());
 CREATE TABLE empresas (
@@ -51,6 +51,7 @@ CREATE TABLE muestras (
 CREATE TABLE ensayos_muestra (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), muestra_id uuid NOT NULL REFERENCES muestras ON DELETE CASCADE,
  ensayo_id uuid NOT NULL REFERENCES catalogo_ensayos, tecnico_id uuid REFERENCES usuarios,
+ estado_revision text NOT NULL DEFAULT 'PENDING' CHECK(estado_revision IN ('PENDING','APPROVED','REJECTED')),
  estado_ensayo text NOT NULL DEFAULT 'PENDING' CHECK(estado_ensayo IN ('PENDING','RUNNING','OBSERVED','COMPLETED','CANCELLED')),
  inicio_previsto date, fin_previsto date, iniciado_en timestamptz, completado_en timestamptz,
  observaciones text NOT NULL DEFAULT '', UNIQUE(muestra_id,ensayo_id),
@@ -94,6 +95,6 @@ CREATE FUNCTION historial_inmutable() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN RAISE EXCEPTION 'El historial es inmutable'; END $$;
 CREATE TRIGGER actividad_inmutable BEFORE UPDATE OR DELETE ON actividad FOR EACH ROW EXECUTE FUNCTION historial_inmutable();
 CREATE TRIGGER informes_inmutables BEFORE UPDATE OR DELETE ON informes FOR EACH ROW EXECUTE FUNCTION historial_inmutable();
-INSERT INTO migraciones_esquema(version) VALUES(4);
+INSERT INTO migraciones_esquema(version) VALUES(6);
 COMMIT;
 

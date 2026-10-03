@@ -185,6 +185,14 @@
   },
   {
     "table_name": "ensayos_muestra",
+    "column_name": "estado_revision",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": "'PENDING'::text",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "ensayos_muestra",
     "column_name": "estado_ensayo",
     "data_type": "text",
     "is_nullable": "NO",

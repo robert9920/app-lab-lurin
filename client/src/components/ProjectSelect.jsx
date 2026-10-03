@@ -1,4 +1,6 @@
+import useErrorNotice from "../hooks/useErrorNotice";
 import { useEffect, useId, useState } from "react";
+import { Loading, ErrorBox } from "./ui";
 import { api, messageOf } from "../services/api";
 
 export default function ProjectSelect({ value, onChange, disabled = false }) {
@@ -6,14 +8,17 @@ export default function ProjectSelect({ value, onChange, disabled = false }) {
     [query, setQuery] = useState(value || ""),
     [open, setOpen] = useState(false),
     [data, setData] = useState(null),
-    [error, setError] = useState(""),
+    [error, setError] = useErrorNotice(),
     [cursor, setCursor] = useState(0),
     [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false),
+    [retry, setRetry] = useState(0);
   useEffect(() => {
     if (!open || disabled) return;
     let live = true;
     const timer = setTimeout(() => {
       setBusy(true);
+      setFailed(false);
       api
         .get("/projects", { params: { scope: "catalog", q: query, limit: 30 } })
         .then((r) => {
@@ -26,6 +31,7 @@ export default function ProjectSelect({ value, onChange, disabled = false }) {
         .catch((e) => {
           if (live) {
             setData(null);
+            setFailed(true);
             setError(messageOf(e));
           }
         })
@@ -37,7 +43,7 @@ export default function ProjectSelect({ value, onChange, disabled = false }) {
       live = false;
       clearTimeout(timer);
     };
-  }, [query, open, disabled]);
+  }, [query, open, disabled, retry, setError]);
   function choose(p) {
     onChange(p.code);
     setQuery(p.code + " - " + p.name);
@@ -115,8 +121,17 @@ export default function ProjectSelect({ value, onChange, disabled = false }) {
           className="project-options"
           onMouseDown={(e) => e.preventDefault()}
         >
-          {busy && <p role="status">Buscando…</p>}
-          {error && <p role="alert">{error}</p>}
+          {busy && <Loading compact>Buscando…</Loading>}
+          {error && <ErrorBox>{error}</ErrorBox>}
+          {failed && !busy && (
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setRetry((n) => n + 1)}
+            >
+              Reintentar consulta
+            </button>
+          )}
           <ul id={id + "-options"} role="listbox">
             {data?.items.map((p, i) => (
               <li

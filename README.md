@@ -1,20 +1,21 @@
-# Laboratorio Lara Consulting · esquema 4
+# Laboratorio Lara Consulting · esquema 6
 
 Aplicación de solicitudes, recepción, ensayos e informes. React JavaScript, Vite y Tailwind CSS en `client`; Python 3.12 y Azure Functions HTTP en `api`; PostgreSQL como persistencia real. Interfaz en español, fechas presentadas en America/Lima.
 
 ## Cambios y compatibilidad
 
-Producción conserva la base **lab_lc** y local **lab_lc_v3**. Los nombres JSON existentes se conservan mediante api/schema_names.py (por ejemplo weight → peso, easting/northing → coordenada_este/coordenada_norte). El número del esquema, ahora **4**, es independiente del nombre de la base. No se requiere crear otra base para actualizar. Hay once tablas; se retiraron `proyectos` y `miembros_proyecto`. El proyecto es un código de texto en `solicitudes.proyecto_id`, sin FK entre bases. `empresa_id` conserva la empresa de la solicitud aunque después se cambie la empresa del autor.
+Producción conserva la base **lab_lc** y local **lab_lc_v3**. Los nombres JSON existentes se conservan mediante api/schema_names.py (por ejemplo weight → peso, easting/northing → coordenada_este/coordenada_norte). El número del esquema, ahora **6**, es independiente del nombre de la base. No se requiere crear otra base para actualizar. Hay once tablas; se retiraron `proyectos` y `miembros_proyecto`. El proyecto es un código de texto en `solicitudes.proyecto_id`, sin FK entre bases. `empresa_id` conserva la empresa de la solicitud aunque después se cambie la empresa del autor.
 
 El acceso sigue usando contraseña Argon2id, sesiones opacas y CSRF. El administrador crea usuarios y restablece contraseñas; no se envían correos ni enlaces. Sin MFA, invitaciones ni FERNET_KEY. Fernet cifraba secretos de funciones retiradas y nunca intervino en el hash de contraseñas. No se puede recuperar una contraseña del hash.
 
 ## Actualizar una instalación existente
 
-1. Respaldar PostgreSQL y los PDF; suspender temporalmente el acceso y detener ambos servidores locales o poner el portal desplegado en mantenimiento.
-2. Verificar `SELECT current_database(); SELECT max(version) FROM migraciones_esquema;`. Debe ser la base deseada y versión 3.
-3. Ejecutar **sql/05_actualizacion_solicitudes.sql**, completo, con el propietario del esquema. No volver a ejecutar 01 ni 03. La migración es transaccional, conserva IDs, muestras, ensayos, informes, historial y sesiones; convierte los UUID de proyecto en sus códigos existentes y elimina las dos tablas de proyectos.
-4. Añadir `PROJECTS_DATABASE_URL` al backend, actualizar ambos paquetes y reiniciar los servidores.
-5. En Administración → Empresas → Editar, marcar la empresa interna. Solo puede existir una; las otras son externas. Revisar las cuentas y probar una solicitud interna y una externa.
+1. Respaldar PostgreSQL y PDF y poner la aplicación en mantenimiento; detener versiones anteriores durante la actualización.
+2. Verificar `SELECT current_database(); SELECT max(version) FROM migraciones_esquema;` en la base deseada: Azure **lab_lc**, local **lab_lc_v3**.
+3. **Si la versión es 5, ejecutar SOLO la nueva sección 5→6** de `sql/05_actualizacion_solicitudes.sql`, desde «NUEVA SECCIÓN — Actualización de esquema 5 a 6: revisión individual de ensayos» hasta su COMMIT. No ejecutar los bloques anteriores. En versión 4 ejecutar 4→5 y 5→6; en versión 3 ejecutar el archivo completo. En versión 6 no repetir. No ejecutar 01 ni datos ficticios sobre una base existente.
+4. Comprobar que la versión resultante es 6. `ensayos_muestra.estado_revision` reemplaza el booleano físico `aprobado`: true se convierte a APPROVED y false a PENDING. Conserva IDs, estados operativos, técnicos, fechas, resultados e informes. No añade tablas.
+5. Publicar `api` y `client` coordinadamente y reiniciar. **No hay nuevas variables ni servicios Azure respecto al esquema 5**; conservar la configuración que ya funciona. `python manage.py migrate` reconoce 3/4/5/6 y es una alternativa explícita al SQL, no un paso adicional automático al publicar.
+6. Probar una aprobación y un rechazo con motivo, reenvío del ensayo rechazado, filtros y PDF antes de reabrir. Para revertir, restaurar juntos respaldo de base y paquetes anteriores; no borrar archivos PDF.
 
 Las cantidades existentes se conservan numéricamente como **sacos**; no se convierten a peso. Si hay cantidades fraccionarias o no finitas, 05 aborta antes de modificar el esquema: revisar con el laboratorio y corregir explícitamente antes de reintentar. Los nuevos pesos, geografía y OT quedan NULL en registros históricos; no se inventan valores. Al editar una solicitud histórica se deberán completar distrito, provincia y departamento. Las coordenadas este y norte permanecen opcionales, incluso al editar.
 
@@ -26,7 +27,7 @@ Requisitos: Anaconda/Miniconda, PostgreSQL en ejecución, Python 3.12, Node.js 2
 
 ### Base vacía
 
-En pgAdmin conectado a `postgres`, ejecutar `sql/00_create_database_local.sql` fuera de transacción. Cambiar a `lab_lc_v3` y ejecutar en orden `01_schema.sql`, `02_catalog.sql` y, solo para demostración, `03_demo.sql`. 01 instala directamente esquema 4. **No ejecutar 05 después de 01**, pues 05 solo actualiza esquema 3. `04_runtime_permissions.sql` concede permisos a una cuenta PostgreSQL limitada opcional, distinta de los roles de usuarios del portal; quien utilice una cuenta existente debe revisar sus permisos. En Azure, el SQL 00 oficial crea `lab_lc`.
+En pgAdmin conectado a `postgres`, ejecutar `sql/00_create_database_local.sql` fuera de transacción. Cambiar a `lab_lc_v3` y ejecutar en orden `01_schema.sql`, `02_catalog.sql` y, solo para demostración, `03_demo.sql`. 01 instala directamente esquema 6. **No ejecutar 05 después de 01**, pues 05 actualiza instalaciones anteriores 3/4/5. `04_runtime_permissions.sql` concede permisos a una cuenta PostgreSQL limitada opcional, distinta de los roles de usuarios del portal; quien utilice una cuenta existente debe revisar sus permisos. En Azure, el SQL 00 oficial crea `lab_lc`.
 
 ### Ventana 1: backend
 
@@ -62,7 +63,7 @@ python manage.py bootstrap
 func start
 ```
 
-`migrate` instala una base vacía o actualiza esquema 3 con 05; no lo ejecutar mientras la versión anterior esté sirviendo peticiones. `bootstrap` inicializa el administrador sin contraseña incorporada. Para datos ficticios: `python manage.py demo`, después `python manage.py password --email admin@example.com` y repetir para las cuentas a usar. `demo` rechaza lab_lc para proteger producción; si se desea una prueba pública con SQL ficticio, cargarlo manualmente y establecer contraseñas desde una ventana privada. Nunca cargar demostración sobre datos reales.
+`migrate` instala una base vacía o actualiza esquema 3/4/5 mediante los bloques correspondientes de 05; no lo ejecutar mientras la versión anterior esté sirviendo peticiones. `bootstrap` inicializa el administrador sin contraseña incorporada. Para datos ficticios: `python manage.py demo`, después `python manage.py password --email admin@example.com` y repetir para las cuentas a usar. `demo` rechaza lab_lc para proteger producción; si se desea una prueba pública con SQL ficticio, cargarlo manualmente y establecer contraseñas desde una ventana privada. Nunca cargar demostración sobre datos reales.
 
 ### Ventana 2: frontend
 
@@ -110,13 +111,37 @@ No ejecutar estos GRANT sin sustituir la cuenta real. También puede utilizarse 
 - **Datos generales:** proyecto solo para la empresa interna; nombre, distrito, provincia y departamento obligatorios. Fecha objetivo, indicaciones y coordenadas este/norte opcionales. No se asume zona UTM ni sistema geodésico a partir de estos números.
 - **Matriz de muestras:** una fila por muestra, hasta 200. Calicata/sondaje y profundidades opcionales; Muestra y Tipo de muestra obligatorios. Sacos: entero positivo o desconocido; Peso: kg positivo o desconocido. Observaciones opcionales. Ensayos en columnas, casillas individuales o aplicadas a filas seleccionadas; duplicación y pegado tabulado de ocho columnas descriptivas desde Excel. No se importan automáticamente los Excel originales.
 - **Envío:** se admiten muestras sin ensayos. Si alguna carece de ellos, el estado es WAITING_ASSAYS / Pendiente de ensayos. Cuando todas tengan ensayos, pasa a SUBMITTED / En revisión. Ambos estados ya son visibles para jefatura y permiten recepción.
-- **Edición:** el autor CLIENT puede editar antes de aprobación, también después de enviar. Desde el envío, el proyecto no cambia. Una muestra recibida conserva su identidad y datos declarados: no se elimina ni se modifica; se pueden incorporar ensayos después. Cambios concurrentes devuelven conflicto para recargar antes de reintentar.
+- **Edición antes de aprobar:** el autor CLIENT puede editar antes de aprobación, también después de enviar. Desde el envío, el proyecto no cambia. Una muestra recibida conserva su identidad y datos declarados: no se elimina ni se modifica; se pueden incorporar ensayos después. Cambios concurrentes devuelven conflicto para recargar antes de reintentar.
 - **Recepción:** jefatura recibe solicitudes enviadas, incluso pendientes de ensayos. TECH recibe solo muestras asignadas de solicitudes aprobadas. Sacos y peso recibidos son datos independientes de los declarados; fecha/hora y transporte se aplican al grupo seleccionado. Recepciones parciales y correcciones mantienen historial y motivo.
 - **OT:** botón Generar OT en Recepción, exclusivo jefatura; código manual normalizado. Requiere al menos una muestra recibida, aunque esté observada/dañada/insuficiente y falten otras. No habilita por sí sola material no conforme. Cambiar una OT exige motivo. Un único texto por solicitud; no se crea tabla de órdenes.
-- **Aprobación:** todas las muestras deben tener al menos un ensayo; aprobación independiente de la recepción. Asignar/programar ensayos requiere solicitud aprobada y OT. Iniciar/retomar exige además responsable y muestra conforme. Asignación no cambia el estado.
+- **Revisión individual:** «Revisar ensayos» permite aprobar o rechazar cada ensayo pendiente, guardar decisiones distintas juntas o revisar uno solo. Rechazar exige motivo; los no seleccionados continúan pendientes. La primera aprobación lleva la solicitud a APPROVED. Si todos se rechazan, sin ninguno aprobado ni pendiente, queda OBSERVED. Los nuevos y los rechazados no pueden asignarse ni ejecutarse; el trabajo aprobado continúa. Revisión y ejecución son campos distintos; asignación sigue derivándose de tecnico_id.
 - **Estados:** pendiente ámbar, ejecución azul, observado rojo, completado verde, cancelado gris. Responsable/jefatura pueden observar/completar solamente después de iniciar. Solo jefatura cancela o retoma con motivo; retomar conserva la fecha inicial. La selección masiva muestra solo acciones válidas para todos y es atómica.
-- **Informes:** PDF privado, máximo 20 MiB/500 páginas, sin cifrado ni contenido activo. Técnicos/jefatura cargan en solicitudes aprobadas; disponibilidad inmediata para usuarios autorizados. Cada carga conserva un archivo y versión. Las comprobaciones técnicas no son un escáner antimalware. Cierre separado de jefatura: ensayos resueltos e informe disponible.
-- **Actas y etiquetas:** bajo demanda, sin almacenamiento histórico adicional. Etiquetas A4, 95×68 mm, 2×4, separación 4 mm; tamaño real/100 %, ocho por página. Código recepción compartible y código laboratorio único; ambos manuales obligatorios al recibir. Se conservan cliente, código proyecto, muestra, punto y profundidad; sin UR ni OT en la etiqueta.
+- **Informes:** PDF privado, máximo 20 MiB/500 páginas, sin cifrado ni contenido activo. Técnicos/jefatura cargan en solicitudes aprobadas; disponibilidad inmediata para usuarios autorizados. Cada carga conserva un archivo y versión. Las comprobaciones técnicas no son un escáner antimalware. Cierre separado de jefatura: todas las muestras con ensayos definidos, ensayos aceptados resueltos, sin decisiones pendientes e informe disponible. Los rechazos resueltos no bloquean por sí solos el cierre.
+- **Actas y etiquetas:** bajo demanda, sin almacenamiento histórico adicional. Etiquetas A4, 95×68 mm, 2×4, separación 4 mm; tamaño real/100 %, ocho por página. Código recepción compartible y código laboratorio único; ambos manuales obligatorios al recibir. Se conservan cliente, código proyecto, muestra, punto y profundidad; sin UR; la esquina inferior izquierda muestra OT: codigo_ot o OT: — si aún no existe.
+
+### Solicitar y revisar ensayos
+
+El autor usa «Solicitar ensayos» después de aprobar, hasta el cierre. `PUT /requests/{rid}/assays` recibe `version` y `samples: [{sample_id, assay_ids}]` para cambiar selecciones pendientes sobre las muestras existentes. No modifica la cabecera, las muestras ni ensayos ya revisados (aprobados o rechazados).
+
+Solo MANAGER puede usar `POST /requests/{rid}/assays/review` con `version` y `decisions: [{task_id, decision, reason}]`. `decision` admite APPROVED o REJECTED; cada rechazo requiere motivo. Se validan pertenencia, duplicados, revisión pendiente, permisos y versión antes de guardar el conjunto en una única transacción. La antigua acción global `approve` devuelve 409 e indica que se debe seleccionar cada ensayo. ADMIN necesita el rol adicional MANAGER para revisar.
+
+El autor CLIENT ve decisión y motivo, también en el historial, con responsable y fecha. «Volver a solicitar» usa `POST /requests/{rid}/assays/resubmit` con `version` y `task_ids`. Reutiliza los mismos registros rechazados, conserva auditoría y vuelve su revisión a PENDING. Una solicitud OBSERVED vuelve a WAITING_ASSAYS si tiene muestras sin ensayos o a SUBMITTED en caso contrario. Cada reenvío requiere otra decisión; una solicitud con trabajo aprobado conserva APPROVED.
+
+JSON mantiene `approved` calculado desde `review_status=APPROVED`, e incorpora `review_status`, `review_reason`, `can_review` y `can_resubmit`. `unapproved_count` cuenta solo revisiones pendientes de ensayos operativamente PENDING; un rechazo resuelto no es «por aprobar». El motivo no añade columnas: procede de eventos públicos de `actividad`. La carga del dashboard solo cuenta ensayos aprobados abiertos.
+
+### Filtros, coordenadas y carga
+
+Solicitudes/Recepción/Trabajo/Informes muestran solicitante y empresa a ADMIN/MANAGER/TECH, usando la empresa conservada en la solicitud. Los parámetros `requester` y `organization` son UUID; las opciones paginadas de `/filter-options?kind=requester|organization&view=requests|reception|work|reports&q=...` respetan el mismo alcance. Los estados admiten comas (`status=APPROVED,SUBMITTED`, `state=PENDING,RUNNING`): OR entre estados, AND con otros filtros. En Solicitudes y Recepción, En revisión (`SUBMITTED`) incluye enviadas abiertas con ensayos pendientes de decisión, también las APPROVED con ensayos nuevos. Pendiente de ensayos (`WAITING_ASSAYS`) incluye enviadas abiertas con alguna muestra sin ensayos, incluso APPROVED u OBSERVED. Ambos excluyen DRAFT, CLOSED y REJECTED; los demás estados siguen filtrando el estado principal. Se retiró el selector separado «Ensayos por definir». El parámetro antiguo `pending_assays=true|false` se mantiene para enlaces existentes y se combina mediante AND. `created_from` y `created_to` incluyen los días completos en America/Lima; filtran creación de solicitud. URL conserva filtros y paginación. «Borrar filtros» limpia todos los parámetros, incluido pending_assays, vuelve a página 1 y reinicia las búsquedas de selectores, conservando la sección. Solicitudes muestra Fecha de creación en Lima y conserva Fecha objetivo. El cliente externo sin roles operativos no ve Proyecto.
+
+Coordenadas opcionales e independientes: este `100000 ≤ valor < 1000000`, norte `1000000 ≤ valor < 10000000`, números finitos con decimales permitidos. Es validación de formato, no de posición, zona ni datum. No se reescriben coordenadas históricas; se valida una coordenada histórica al modificarla. Profundidad cero sigue siendo válida y es independiente de esta regla.
+
+`Loading` distingue carga de vacío y error; `NetworkLoading` indica consultas y descargas en curso. Los listados conservan sus datos mientras se actualizan. Los controles de envío usan `busy` para impedir envíos duplicados. Los avisos de error usan `useErrorNotice` y `ErrorBox`: visibles 5 segundos, desvanecimiento de 500 ms; un nuevo error idéntico reinicia el plazo. Las marcas de campos inválidos permanecen hasta corregirse. El estado de fallo de una consulta se conserva separado del aviso: desaparecer no inicia otra carga. Los selectores y consultas recuperables permiten reintentar.
+
+### Cabecera y controles numéricos
+
+La cabecera muestra el nombre completo registrado y la empresa debajo, sin etiquetas de rol añadidas ni truncamiento; en móvil permite varias líneas. Inicio de sesión y sesión incluyen `organization_name`. Los nombres existentes no se editan automáticamente: un texto como «cliente interno» que forme parte del nombre registrado seguirá apareciendo hasta que el administrador lo cambie.
+
+`NumericInput` se usa en sacos/peso de declaración y recepción. Sacos: mínimo 1, entero e incremento 1. Peso: positivo e incremento 0.1 kg. Las flechas son botones propios para no imponer un step de 0.1 a los decimales escritos: por ejemplo, 0.025 permanece 0.025 y la flecha suma 0.1 sin redondearlo a una décima. Profundidades conservan sus controles anteriores. No se redondean datos existentes.
 
 ## Permisos y privacidad
 
@@ -156,11 +181,134 @@ npm test
 npm run build
 ```
 
-Las pruebas PostgreSQL requieren TEST_DATABASE_URL apuntando exclusivamente a una base ficticia admitida, por ejemplo lab_lc_v4_test. E2E usa LAB_E2E_URL y LAB_E2E_PASSWORD privados y cuentas ficticias. No usar bases reales. Resultados y limitaciones: [docs/verification.md](docs/verification.md). Contrato: [docs/openapi.json](docs/openapi.json). ERD: [Mermaid](docs/database.mmd) y [SVG](docs/database.svg). Publicación y actualización de Azure: [docs/deployment.md](docs/deployment.md).
+Las pruebas PostgreSQL requieren TEST_DATABASE_URL apuntando exclusivamente a una base ficticia admitida, por ejemplo lab_lc_v6_unit_test. E2E usa LAB_E2E_URL y LAB_E2E_PASSWORD privados y cuentas ficticias. No usar bases reales. Resultados y limitaciones: [docs/verification.md](docs/verification.md). Contrato: [docs/openapi.json](docs/openapi.json). ERD: [Mermaid](docs/database.mmd) y [SVG](docs/database.svg). Publicación y actualización de Azure: [docs/deployment.md](docs/deployment.md).
 
-Git, VS Code App Service y Functions tienen exclusiones independientes. No publicar .env, local.settings.json, .local, PDF locales, cachés, entornos ni node_modules Windows; sí lockfiles y certificados públicos. El frontend publicado requiere dist más server.mjs y sus dependencias; npm run build no crea un ZIP ni agrega el proxy. Se mantienen las configuraciones de despliegue existentes. La actualización necesita únicamente la conexión privada al catálogo y permisos de lectura además del SQL y ambos paquetes.
+Git, VS Code App Service y Functions tienen exclusiones independientes. No publicar .env, local.settings.json, .local, PDF locales, cachés, entornos ni node_modules Windows; sí lockfiles y certificados públicos. El frontend publicado requiere dist más server.mjs y sus dependencias; npm run build no crea un ZIP ni agrega el proxy. Se mantienen las configuraciones de despliegue existentes. Esta actualización 5→6 solo necesita el nuevo bloque SQL y ambos paquetes; no cambia conexiones, permisos de infraestructura ni variables Azure.
 
 Los controles de aplicación no son una garantía absoluta de seguridad de Azure. Mantener HTTPS, verify-full, Blob privado, copias y restauración coordinada con los informes; probar la nueva entrega en los recursos reales antes de habilitar usuarios.
+
+<!-- TYPOGRAPHY:START -->
+## Dónde cambiar el tamaño de cada texto
+
+Todos los tamaños de la web están en **client/src/styles.css**. Al principio, las variables `--text-*` definen la escala en **píxeles CSS**, independiente del zoom del navegador. Para cambiar un grupo completo, modifica su variable; para un texto concreto, modifica la regla del selector indicado abajo. Las reglas posteriores y los contextos responsive pueden prevalecer sobre las generales. Los textos sin tamaño explícito heredan el de su contenedor; la base es 15 px.
+
+| Texto / componente | Control principal |
+|---|---|
+| Texto general, todas las páginas | `:root` → `--text-body` (15 px) |
+| Títulos PageHead / ui.jsx | `h1`, `.page-head` y reglas responsive; 32 px general |
+| Títulos de tarjetas / ui.jsx, detalles y formularios | `h2`, `.card-title h2`; variable según inventario |
+| Campos y botones / Field, Button, SearchSelect | `.field`, `.btn`, `.search-select`, `.select-popover`; controles 14 px |
+| Tablas / Dashboard, WorkPanel, ReportsPage, RequestDetail, Admin | `th`, `td`, `.table-scroll`, `.table-link`; encabezados 14 px |
+| Matriz / RequestForm y AssaysEditor | `.sample-matrix`, `.assay-edit-matrix`; encabezados 14 px, datos según control |
+| Estados / Badge, RequestBadges | `.badge`, `.status-stack` |
+| Navegación y usuario / App.jsx | `.workspace-nav a`, `.user-block`, reglas móvil |
+| LABORATORIO LURÍN / App.jsx | `.portal-header .brand span` → `--text-brand` (11 px) |
+| Pie izquierdo y derecho / App.jsx | `.workspace-footer`, `.workspace footer` → `--text-tiny` (12 px) |
+| Indicadores y gráficos / Dashboard.jsx | `.metric-value`, barras y leyendas: inventario de reglas debajo |
+| Inicio de sesión / Login.jsx | selectores `.login-*` y sus excepciones responsive |
+| Carga y errores / ui.jsx | `.loading-state`, `.error-box` → 14 px |
+
+Escala central: --text-brand = 11px; --text-tiny = 12px; --text-small = 13px; --text-control = 14px; --text-body = 15px; --text-subheading = 16px; --text-heading = 20px; --text-title-small = 27px; --text-metric = 29px; --text-title-medium = 31px; --text-title = 32px; --text-hero-small = 36px; --text-hero = 56px.
+
+### Inventario exacto de declaraciones (en orden del archivo)
+
+| Selector | Contexto | Variable | Tamaño | Línea CSS |
+|---|---|---|---|---|
+| `:root` | General | `--text-body` | 15px | [29](client/src/styles.css#L29) |
+| `h1` | General | `--text-title` | 32px | [68](client/src/styles.css#L68) |
+| `h2` | General | `--text-heading` | 20px | [75](client/src/styles.css#L75) |
+| `h3` | General | `--text-subheading` | 16px | [80](client/src/styles.css#L80) |
+| `small` | General | `--text-small` | 13px | [87](client/src/styles.css#L87) |
+| `.eyebrow` | General | `--text-tiny` | 12px | [134](client/src/styles.css#L134) |
+| `.btn` | General | `--text-control` | 14px | [151](client/src/styles.css#L151) |
+| `.brand span` | General | `--text-brand` | 11px | [227](client/src/styles.css#L227) |
+| `.nav-caption` | General | `--text-tiny` | 12px | [233](client/src/styles.css#L233) |
+| `.sidebar nav a` | General | `--text-control` | 14px | [249](client/src/styles.css#L249) |
+| `.secure-note` | General | `--text-small` | 13px | [271](client/src/styles.css#L271) |
+| `.secure-note small` | General | `--text-tiny` | 12px | [275](client/src/styles.css#L275) |
+| `.user-block` | General | `--text-small` | 13px | [283](client/src/styles.css#L283) |
+| `.user-block small` | General | `--text-tiny` | 12px | [297](client/src/styles.css#L297) |
+| `.avatar` | General | `--text-small` | 13px | [309](client/src/styles.css#L309) |
+| `.topbar` | General | `--text-small` | 13px | [324](client/src/styles.css#L324) |
+| `.page-head p` | General | `--text-control` | 14px | [362](client/src/styles.css#L362) |
+| `.welcome-banner h2` | General | `--text-title-medium` | 31px | [380](client/src/styles.css#L380) |
+| `.welcome-banner p` | General | `--text-control` | 14px | [387](client/src/styles.css#L387) |
+| `.welcome-banner a` | General | `--text-small` | 13px | [395](client/src/styles.css#L395) |
+| `.art-tag` | General | `--text-tiny` | 12px | [440](client/src/styles.css#L440) |
+| `.stat-card strong` | General | `--text-metric` | 29px | [483](client/src/styles.css#L483) |
+| `.stat-card span` | General | `--text-tiny` | 12px | [492](client/src/styles.css#L492) |
+| `.card-title h2` | General | `--text-subheading` | 16px | [517](client/src/styles.css#L517) |
+| `.text-link` | General | `--text-tiny` | 12px | [526](client/src/styles.css#L526) |
+| `table` | General | `--text-small` | 13px | [536](client/src/styles.css#L536) |
+| `th` | General | `--text-tiny` | 12px | [540](client/src/styles.css#L540) |
+| `.table-link > b` | General | `--text-tiny` | 12px | [564](client/src/styles.css#L564) |
+| `.table-link > small` | General | `--text-tiny` | 12px | [575](client/src/styles.css#L575) |
+| `.badge` | General | `--text-tiny` | 12px | [589](client/src/styles.css#L589) |
+| `.progress-caption` | General | `--text-tiny` | 12px | [645](client/src/styles.css#L645) |
+| `.activity-item b` | General | `--text-small` | 13px | [661](client/src/styles.css#L661) |
+| `.activity-item small` | General | `--text-tiny` | 12px | [667](client/src/styles.css#L667) |
+| `.help-card h3` | General | `--text-control` | 14px | [688](client/src/styles.css#L688) |
+| `.help-card p` | General | `--text-tiny` | 12px | [692](client/src/styles.css#L692) |
+| `.help-card a` | General | `--text-tiny` | 12px | [699](client/src/styles.css#L699) |
+| `.empty` | General | `--text-control` | 14px | [706](client/src/styles.css#L706) |
+| `.workspace-footer` | General | `--text-tiny` | 12px | [722](client/src/styles.css#L722) |
+| `.error-box` | General | `--text-control` | 14px | [731](client/src/styles.css#L731) |
+| `.notice` | General | `--text-control` | 14px | [740](client/src/styles.css#L740) |
+| `.filter-bar > select` | General | `--text-control` | 14px | [763](client/src/styles.css#L763) |
+| `.pagination` | General | `--text-small` | 13px | [771](client/src/styles.css#L771) |
+| `.field > span, .field-label` | General | `--text-small` | 13px | [786](client/src/styles.css#L786) |
+| `.back-link` | General | `--text-small` | 13px | [818](client/src/styles.css#L818) |
+| `.steps button` | General | `--text-control` | 14px | [832](client/src/styles.css#L832) |
+| `.sample-editor header` | General | `--text-control` | 14px | [863](client/src/styles.css#L863) |
+| `.assay-chips label` | General | `--text-small` | 13px | [872](client/src/styles.css#L872) |
+| `.request-overview small` | General | `--text-tiny` | 12px | [904](client/src/styles.css#L904) |
+| `.request-overview b` | General | `--text-control` | 14px | [910](client/src/styles.css#L910) |
+| `.tabs button` | General | `--text-control` | 14px | [930](client/src/styles.css#L930) |
+| `.detail-columns p` | General | `--text-control` | 14px | [951](client/src/styles.css#L951) |
+| `dl` | General | `--text-control` | 14px | [958](client/src/styles.css#L958) |
+| `.next-step p` | General | `--text-small` | 13px | [977](client/src/styles.css#L977) |
+| `.comment` | General | `--text-small` | 13px | [983](client/src/styles.css#L983) |
+| `.check-label` | General | `--text-control` | 14px | [997](client/src/styles.css#L997) |
+| `.document-hero p` | General | `--text-control` | 14px | [1008](client/src/styles.css#L1008) |
+| `.document-row` | General | `--text-small` | 13px | [1024](client/src/styles.css#L1024) |
+| `.list-row, .issue` | General | `--text-control` | 14px | [1047](client/src/styles.css#L1047) |
+| `.list-row p` | General | `--text-small` | 13px | [1052](client/src/styles.css#L1052) |
+| `.timeline-item` | General | `--text-control` | 14px | [1069](client/src/styles.css#L1069) |
+| `.activation h1` | General | `--text-title-small` | 27px | [1142](client/src/styles.css#L1142) |
+| `.login-story h1` | General | `--text-hero` | 56px | [1180](client/src/styles.css#L1180) |
+| `.login-story p` | General | `--text-body` | 15px | [1188](client/src/styles.css#L1188) |
+| `.story-track` | General | `--text-tiny` | 12px | [1195](client/src/styles.css#L1195) |
+| `.login-story footer` | General | `--text-small` | 13px | [1202](client/src/styles.css#L1202) |
+| `.login-form h2` | General | `--text-metric` | 29px | [1215](client/src/styles.css#L1215) |
+| `.login-form p` | General | `--text-control` | 14px | [1220](client/src/styles.css#L1220) |
+| `.login-security` | General | `--text-tiny` | 12px | [1239](client/src/styles.css#L1239) |
+| `.stat-card span` | `@media (max-width: 1200px)` | `--text-tiny` | 12px | [1299](client/src/styles.css#L1299) |
+| `h1` | `@media (max-width: 800px)` | `--text-title-small` | 27px | [1347](client/src/styles.css#L1347) |
+| `.welcome-banner h2` | `@media (max-width: 800px)` | `--text-title-small` | 27px | [1363](client/src/styles.css#L1363) |
+| `.steps button` | `@media (max-width: 800px)` | `--text-tiny` | 12px | [1374](client/src/styles.css#L1374) |
+| `.login-story h1` | `@media (max-width: 800px)` | `--text-hero-small` | 36px | [1404](client/src/styles.css#L1404) |
+| `.chart-legend` | General | `--text-control` | 14px | [1464](client/src/styles.css#L1464) |
+| `.history-entry pre` | General | `--text-control` | 14px | [1528](client/src/styles.css#L1528) |
+| `.portal-header .brand span` | General | `--text-brand` | 11px | [1693](client/src/styles.css#L1693) |
+| `.workspace-nav a` | General | `--text-control` | 14px | [1710](client/src/styles.css#L1710) |
+| `.sample-matrix th` | General | `--text-small` | 13px | [1891](client/src/styles.css#L1891) |
+| `.sample-matrix textarea` | General | `--text-control` | 14px | [1942](client/src/styles.css#L1942) |
+| `.portal-header .user-block b` | `@media (max-width: 600px)` | `--text-small` | 13px | [2157](client/src/styles.css#L2157) |
+| `.portal-header .user-block small` | `@media (max-width: 600px)` | `--text-tiny` | 12px | [2160](client/src/styles.css#L2160) |
+| `.steps button` | `@media (max-width: 600px)` | `--text-small` | 13px | [2174](client/src/styles.css#L2174) |
+| `.portal-header .brand span` | General | `--text-brand` | 11px | [2214](client/src/styles.css#L2214) |
+| `.workspace footer` | General | `--text-tiny` | 12px | [2217](client/src/styles.css#L2217) |
+| `.table-scroll thead th` | General | `--text-control` | 14px | [2262](client/src/styles.css#L2262) |
+| `.external-service` | General | `--text-small` | 13px | [2321](client/src/styles.css#L2321) |
+| `.loading-state` | General | `--text-control` | 14px | [2386](client/src/styles.css#L2386) |
+| `.select-clear` | General | `--text-heading` | 20px | [2419](client/src/styles.css#L2419) |
+| `.select-popover [role="option"]` | General | `--text-control` | 14px | [2439](client/src/styles.css#L2439) |
+| `.select-popover p` | General | `--text-small` | 13px | [2455](client/src/styles.css#L2455) |
+| `.work-hint` | General | `--text-small` | 13px | [2564](client/src/styles.css#L2564) |
+| `.numeric-buttons button` | General | `--text-control` | 14px | [2640](client/src/styles.css#L2640) |
+
+Regenerar este inventario después de cambiar CSS: `node scripts/export_typography.mjs` (requiere las dependencias instaladas de client). Las fuentes del PDF son independientes: `api/services/documents.py`, función `render_labels`; no se cambian con el CSS web.
+<!-- TYPOGRAPHY:END -->
 
 <!-- BEGIN FIELD DICTIONARY -->
 ## Diccionario completo de la base de datos
@@ -269,6 +417,7 @@ Una fila por pareja muestra–tipo de ensayo. Es la unidad contada en el dashboa
 | `muestra_id` | `uuid` | Sí | `Sin valor; debe suministrarse` | muestras.id | Muestra sobre la que se solicita y ejecuta el ensayo. |
 | `ensayo_id` | `uuid` | Sí | `Sin valor; debe suministrarse` | catalogo_ensayos.id | Tipo de ensayo del catálogo; no se repite para la misma muestra. |
 | `tecnico_id` | `uuid` | No | `NULL` | usuarios.id | Responsable asignado; usuario activo TECH o MANAGER al asignar. |
+| `estado_revision` | `text` | Sí | `'PENDING'::text` | — | PENDING, APPROVED o REJECTED. Decisión de revisión separada de la ejecución; nuevos ensayos comienzan PENDING. Motivo, fecha y responsable se conservan en actividad. |
 | `estado_ensayo` | `text` | Sí | `'PENDING'::text` | — | PENDING, RUNNING, OBSERVED, COMPLETED o CANCELLED. |
 | `inicio_previsto` | `date` | No | `NULL` | — | Fecha prevista de inicio, opcional. |
 | `fin_previsto` | `date` | No | `NULL` | — | Fecha prevista final, opcional; determina si el ensayo abierto está vencido. |
@@ -331,11 +480,11 @@ Contador compartido entre instancias para los intentos de acceso.
 
 ### migraciones_esquema
 
-Versiones instaladas, independientes del nombre de la base. El esquema actual es 4.
+Versiones instaladas, independientes del nombre de la base. El esquema actual es 6.
 
 | Campo | Tipo | Obligatorio (NOT NULL) | Valor predeterminado SQL | Relación / clave | Función |
 |---|---|---|---|---|---|
-| `version` | `integer` | Sí | `Sin valor; debe suministrarse` | PK | Versión instalada, PK. Instalación limpia: 4; una migración conserva además el registro 3. |
+| `version` | `integer` | Sí | `Sin valor; debe suministrarse` | PK | Versión instalada, PK. Instalación limpia: 6; las migraciones conservan también las versiones previas. |
 | `aplicado_en` | `timestamptz` | Sí | `now()` | — | Instante de instalación de la versión del esquema. |
 
 <!-- END FIELD DICTIONARY -->

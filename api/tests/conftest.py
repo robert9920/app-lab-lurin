@@ -15,9 +15,13 @@ if urlparse(os.environ["DATABASE_URL"]).path not in (
     "/lab_lc_release_test",
     "/lab_lc_v4_test",
     "/lab_lc_v4_unit_test",
+    "/lab_lc_v5_unit_test",
+    "/lab_lc_v5_test",
+    "/lab_lc_v6_unit_test",
+    "/lab_lc_v6_test",
 ):
     raise RuntimeError(
-        "TEST_DATABASE_URL debe apuntar a una base ficticia de pruebas admitida, con esquema 4."
+        "TEST_DATABASE_URL debe apuntar a una base ficticia de pruebas admitida, con esquema 6."
     )
 os.environ["APP_ENV"] = "development"
 os.environ["APP_ORIGIN"] = "http://localhost:5173"

@@ -31,7 +31,7 @@ def login(db, req):
     rate_limit("login:" + str(data.email).lower())
     user = one(
         db,
-        "SELECT u.*,coalesce(o.es_interna,false) es_interna FROM usuarios u LEFT JOIN empresas o ON o.id=u.empresa_id WHERE u.correo=:email FOR UPDATE OF u",
+        "SELECT u.*,o.nombre organization_name,coalesce(o.es_interna,false) es_interna FROM usuarios u LEFT JOIN empresas o ON o.id=u.empresa_id WHERE u.correo=:email FOR UPDATE OF u",
         email=str(data.email).lower(),
     )
     valid = verify_password(user["password_hash"] if user else DUMMY, data.password)

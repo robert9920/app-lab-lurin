@@ -24,7 +24,7 @@ import RequestForm from "./pages/RequestForm";
 import Admin from "./pages/Admin";
 import WorkPage from "./pages/WorkPage";
 import ReportsPage from "./pages/ReportsPage";
-import { labels } from "./components/ui";
+import { Loading, NetworkLoading } from "./components/ui";
 export default function App() {
   const { user, loading, logout } = useAuth(),
     [open, setOpen] = useState(false),
@@ -32,7 +32,7 @@ export default function App() {
   if (loading)
     return (
       <div className="center-page">
-        <FlaskConical className="spin" /> Cargando laboratorio…
+        <Loading>Cargando laboratorio…</Loading>
       </div>
     );
   if (!user) return <Login />;
@@ -56,6 +56,7 @@ export default function App() {
   ];
   return (
     <div className="app-shell">
+      <NetworkLoading />
       <div className="workspace">
         <header className="portal-header">
           <NavLink to="/" className="brand">
@@ -108,7 +109,9 @@ export default function App() {
             </div>
             <div>
               <b>{user.name}</b>
-              <small>{labels[user.roles[0]]}</small>
+              <small>
+                {user.organization_name || "Sin empresa registrada"}
+              </small>
             </div>
             <button
               onClick={logout}

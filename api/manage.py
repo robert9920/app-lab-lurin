@@ -32,6 +32,10 @@ def main():
             "lab_lc_release_test",
             "lab_lc_v4_test",
             "lab_lc_v4_unit_test",
+            "lab_lc_v5_test",
+            "lab_lc_v5_unit_test",
+            "lab_lc_v6_test",
+            "lab_lc_v6_unit_test",
         ):
             raise SystemExit(
                 "Este instalador solo admite lab_lc, lab_lc_v3 o una base ficticia de pruebas prevista."
@@ -55,9 +59,15 @@ def main():
                 version = conn.execute("SELECT max(version) FROM migraciones_esquema").fetchone()[0]
                 if version == 3 and args.command == "migrate":
                     conn.execute((sql_dir / "05_actualizacion_solicitudes.sql").read_text(encoding="utf-8"))
-                elif version != 4:
+                elif version == 4 and args.command == "migrate":
+                    migration = (sql_dir / "05_actualizacion_solicitudes.sql").read_text(encoding="utf-8")
+                    conn.execute(migration.split("-- SECCION_ESQUEMA_5", 1)[1])
+                elif version == 5 and args.command == "migrate":
+                    migration = (sql_dir / "05_actualizacion_solicitudes.sql").read_text(encoding="utf-8")
+                    conn.execute(migration.split("-- SECCION_ESQUEMA_6", 1)[1])
+                elif version != 6:
                     raise SystemExit(
-                        "Versión incompatible; migrate actualiza esquema 3 a 4. Detén los servidores y respalda antes."
+                        "Versión incompatible; migrate actualiza esquema 3/4/5 a 6. Detén los servidores y respalda antes."
                     )
             conn.execute(
                 (sql_dir / ("03_demo.sql" if args.command == "demo" else "02_catalog.sql")).read_text(
@@ -67,7 +77,7 @@ def main():
         print(
             "Datos ficticios preparados; inicializa las contraseñas con password."
             if args.command == "demo"
-            else "Esquema 4 y catálogo preparados."
+            else "Esquema 6 y catálogo preparados."
         )
         return
     from pydantic import EmailStr, TypeAdapter

@@ -1,9 +1,15 @@
+import useErrorNotice from "../hooks/useErrorNotice";
+import SearchSelect from "../components/SearchSelect";
+import RequesterFilters from "../components/RequesterFilters";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { api, messageOf } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import {
   PageHead,
+  ClearFilters,
+  Loading,
+  RequestBadges,
   Badge,
   Empty,
   ErrorBox,
@@ -46,11 +52,16 @@ export function Pager({ data, params, setParams }) {
 export function RequestList({ mode = "requests" }) {
   const { user } = useAuth();
   const canRequest = user.roles.includes("CLIENT");
+  const staff = user.roles.some((r) =>
+    ["ADMIN", "MANAGER", "TECH"].includes(r),
+  );
   const [params, setParams] = useSearchParams(),
     location = useLocation();
   const [data, setData] = useState(null),
-    [error, setError] = useState(""),
-    [projects, setProjects] = useState([]);
+    [error, setError] = useErrorNotice(),
+    [projects, setProjects] = useState([]),
+    [loading, setLoading] = useState(true);
+  const [filterEpoch, setFilterEpoch] = useState(0);
   const reception = mode === "reception";
   const query = params.toString();
   useEffect(() => {
@@ -58,10 +69,10 @@ export function RequestList({ mode = "requests" }) {
       .get("/projects")
       .then((r) => setProjects(r.data))
       .catch((e) => setError(messageOf(e)));
-  }, []);
+  }, [setError]);
   useEffect(() => {
     let active = true;
-    setData(null);
+    setLoading(true);
     api
       .get("/requests?" + query + (reception ? "&view=reception" : ""))
       .then((r) => {
@@ -72,11 +83,14 @@ export function RequestList({ mode = "requests" }) {
       })
       .catch((e) => {
         if (active) setError(messageOf(e));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
       });
     return () => {
       active = false;
     };
-  }, [query, reception]);
+  }, [query, reception, setError]);
   function filter(k, v) {
     const p = new URLSearchParams(params);
     v ? p.set(k, v) : p.delete(k);
@@ -106,7 +120,13 @@ export function RequestList({ mode = "requests" }) {
         <aside className="card form-card filters-panel">
           <details open>
             <summary>Filtros</summary>
-            <div className="form-grid">
+            <div className="filter-actions">
+              <ClearFilters
+                setParams={setParams}
+                onClear={() => setFilterEpoch((n) => n + 1)}
+              />
+            </div>
+            <div className="form-grid" key={filterEpoch}>
               <Field label="Buscar solicitud">
                 <input
                   placeholder="Código, título o proyecto"
@@ -114,81 +134,88 @@ export function RequestList({ mode = "requests" }) {
                   onChange={(e) => filter("q", e.target.value)}
                 />
               </Field>
-              <Field label="Proyecto">
-                <select
-                  value={params.get("project") || ""}
-                  onChange={(e) => filter("project", e.target.value)}
-                >
-                  <option value="">Todos los proyectos</option>
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name !== p.code ? `${p.code} · ${p.name}` : p.code}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              {reception && (
-                <Field label="Estado de recepción">
-                  <select
-                    value={params.get("condition") || ""}
-                    onChange={(e) => filter("condition", e.target.value)}
-                  >
-                    <option value="">Todas por atender</option>
-                    <option value="NOT_RECEIVED">
-                      Con muestras sin recibir
-                    </option>
-                    <option value="NO_OT">Sin OT</option>
-                    <option value="issues">
-                      Con muestras observadas, dañadas o insuficientes
-                    </option>
-                  </select>
+              {(staff || user.is_internal) && (
+                <Field label="Proyecto">
+                  <SearchSelect
+                    options={projects}
+                    value={params.get("project") || ""}
+                    onChange={(v) => filter("project", v)}
+                  />
                 </Field>
               )}
-              {!reception && (
-                <Field label="Estado">
-                  <select
-                    value={params.get("status") || ""}
-                    onChange={(e) => filter("status", e.target.value)}
-                  >
-                    <option value="">Todos los estados</option>
-                    {[
-                      ...(!user.roles.some((r) =>
-                        ["ADMIN", "MANAGER", "TECH"].includes(r),
-                      )
-                        ? ["DRAFT"]
-                        : []),
-                      "WAITING_ASSAYS",
-                      "SUBMITTED",
-                      "OBSERVED",
-                      "APPROVED",
-                      "REJECTED",
-                      "CLOSED",
-                    ].map((s) => (
-                      <option key={s} value={s}>
-                        {labels[s]}
-                      </option>
-                    ))}
-                  </select>
+              {staff && (
+                <RequesterFilters params={params} filter={filter} view={mode} />
+              )}
+              {reception && (
+                <Field label="Estado de recepción">
+                  <SearchSelect
+                    value={params.get("condition") || ""}
+                    onChange={(v) => filter("condition", v)}
+                    options={[
+                      { id: "NOT_RECEIVED", name: "Con muestras sin recibir" },
+                      { id: "NO_OT", name: "Sin OT" },
+                      {
+                        id: "issues",
+                        name: "Con muestras observadas, dañadas o insuficientes",
+                      },
+                    ]}
+                  />
                 </Field>
+              )}
+              <Field label="Estado">
+                <SearchSelect
+                  multiple
+                  value={params.get("status") || ""}
+                  onChange={(v) => filter("status", v)}
+                  options={[
+                    ...(!staff && !reception ? ["DRAFT"] : []),
+                    "WAITING_ASSAYS",
+                    "SUBMITTED",
+                    "OBSERVED",
+                    "APPROVED",
+                    ...(!reception ? ["REJECTED", "CLOSED"] : []),
+                  ].map((id) => ({ id, name: labels[id] }))}
+                />
+              </Field>
+              {!reception && (
+                <>
+                  {[
+                    ["created_from", "Creada desde"],
+                    ["created_to", "Creada hasta"],
+                  ].map(([key, label]) => (
+                    <Field key={key} label={label}>
+                      <input
+                        type="date"
+                        value={params.get(key) || ""}
+                        onChange={(e) => filter(key, e.target.value)}
+                      />
+                    </Field>
+                  ))}
+                </>
               )}
             </div>
           </details>
         </aside>
-        <section className="card results-panel">
-          {!data ? (
-            <p className="form-card">Cargando solicitudes…</p>
-          ) : data.items.length ? (
+        <section className="card results-panel" aria-busy={loading}>
+          {loading && (
+            <Loading>
+              {data ? "Actualizando solicitudes…" : "Cargando solicitudes…"}
+            </Loading>
+          )}
+          {!data ? null : data.items.length ? (
             <div className="table-scroll">
               <table>
                 <thead>
                   <tr>
                     <th>Solicitud / proyecto</th>
+                    {staff && <th>Solicitante / Empresa</th>}
                     <th>Estado</th>
                     <th>
                       {reception ? "Muestras por atender" : "Avance de ensayos"}
                     </th>
+                    {!reception && <th>Fecha de creación</th>}
                     <th>Fecha objetivo</th>
-                    <th />
+                    <th className="action-column" aria-label="Acciones" />
                   </tr>
                 </thead>
                 <tbody>
@@ -208,8 +235,14 @@ export function RequestList({ mode = "requests" }) {
                           <small>{r.project_code}</small>
                         </Link>
                       </td>
+                      {staff && (
+                        <td>
+                          <b>{r.requester_name}</b>
+                          <small className="block">{r.organization_name}</small>
+                        </td>
+                      )}
                       <td>
-                        <Badge state={r.status} />
+                        <RequestBadges request={r} />
                       </td>
                       <td>
                         {reception ? (
@@ -228,8 +261,9 @@ export function RequestList({ mode = "requests" }) {
                           </>
                         )}
                       </td>
+                      {!reception && <td>{fmtDate(r.created_at)}</td>}
                       <td>{fmtDate(r.target_date)}</td>
-                      <td>
+                      <td className="action-column">
                         <Link
                           className="btn"
                           to={detailUrl(
@@ -265,14 +299,19 @@ export default function Dashboard() {
   const { user } = useAuth(),
     canView = user.roles.some((r) => ["ADMIN", "MANAGER", "TECH"].includes(r));
   const [data, setData] = useState(null),
-    [error, setError] = useState("");
+    [error, setError] = useErrorNotice();
+  const [loading, setLoading] = useState(canView),
+    [retry, setRetry] = useState(0);
   useEffect(() => {
-    if (canView)
+    if (canView) {
+      setLoading(true);
       api
         .get("/dashboard")
         .then((r) => setData(r.data))
-        .catch((e) => setError(messageOf(e)));
-  }, [canView]);
+        .catch((e) => setError(messageOf(e)))
+        .finally(() => setLoading(false));
+    }
+  }, [canView, retry, setError]);
   if (!canView)
     return (
       <>
@@ -499,8 +538,12 @@ export default function Dashboard() {
             </section>
           </div>
         </>
+      ) : loading ? (
+        <Loading>Cargando indicadores…</Loading>
       ) : (
-        !error && <p>Cargando indicadores…</p>
+        <Button onClick={() => setRetry((n) => n + 1)}>
+          Reintentar consulta
+        </Button>
       )}
     </>
   );

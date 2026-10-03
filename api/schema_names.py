@@ -1,4 +1,4 @@
-"""Explicit PostgreSQL esquema 4 → stable HTTP/domain field mapping. SQL itself uses Spanish names."""
+"""Explicit PostgreSQL esquema 6 → stable HTTP/domain field mapping. SQL itself uses Spanish names."""
 
 TABLE_NAMES = {
     "organizations": "empresas",
@@ -55,6 +55,7 @@ FIELD_NAMES = {
     "reception_notes": "observaciones_recepcion",
     "sample_id": "muestra_id",
     "assay_id": "ensayo_id",
+    "review_status": "estado_revision",
     "technician_id": "tecnico_id",
     "state": "estado_ensayo",
     "planned_start": "inicio_previsto",
@@ -81,4 +82,7 @@ HTTP_FIELDS = {value: key for key, value in FIELD_NAMES.items()}
 
 
 def domain_row(row):
-    return {HTTP_FIELDS.get(key, key): value for key, value in row.items()}
+    result = {HTTP_FIELDS.get(key, key): value for key, value in row.items()}
+    if "review_status" in result:
+        result["approved"] = result["review_status"] == "APPROVED"
+    return result

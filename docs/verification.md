@@ -1,4 +1,75 @@
-# Verificación · esquema 4
+# Verificación · esquema 6
+
+Ejecutada el **2 de octubre de 2026**, con PostgreSQL y servidores locales aislados. Se conservaron `lab_lc_v3`, `lab_lc`, AppControlHH y la configuración privada original. No se publicaron cambios ni se modificaron recursos Azure.
+
+## Resultados de esta actualización
+
+| Comprobación | Resultado |
+|---|---|
+| Backend / pytest | **57 pruebas aprobadas**, con rollback por prueba sobre `lab_lc_v6_unit_test`. |
+| Frontend / Vitest | **8 pruebas aprobadas**. |
+| Chrome / Playwright | **8 recorridos aprobados**: cuatro nuevos v6 y cuatro de regresión v5, contra Functions 7072 y Vite 5174 aislados. |
+| Ruff / ESLint | Sin errores. |
+| Vite producción | Compilación correcta, **1833 módulos**; paquete dist generado. |
+| SQL 05 | Cadena 3→4→5→6 en `lab_lc_v6_migration_test`. Conversión de aprobado=true/false a APPROVED/PENDING, sin modificar estados operativos, técnicos, fechas ni identidades. |
+| Integridad de migración | Tipos, nulabilidad y defaults coinciden con instalación limpia. Once tablas, 95 campos. Repetir 5→6 se rechaza. Se conserva la prueba de rollback de cantidades históricas incompatibles con 3→4. |
+| Contratos y documentación | README/diccionario, Mermaid, SVG y **30 rutas** OpenAPI actualizados a esquema6. Inventario de **92 reglas tipográficas** con variables, selectores y líneas. |
+| Publicación | **27 archivos** del backend admitidos por .funcignore; sin settings privados, entornos, cachés ni pruebas. Fuentes, adaptador de proyectos y certificados públicos incluidos. Las exclusiones de VS Code del frontend conservan fuentes/proxy/lockfile y excluyen dependencias locales, pruebas y secretos. |
+| Revisión visual | Capturas inspeccionadas de cabecera a 768 y 390 px, revisión individual y rechazo visible al cliente a 1440 px, más render del SVG. Sin truncamiento de nombre/empresa ni desbordamiento horizontal global en móvil. |
+
+Cobertura funcional nueva: nombre y empresa de sesión/login; avisos repetidos reinician el plazo de 5s + 500ms; mensajes de celdas desaparecen y marcas inválidas permanecen. Fallo de consulta conserva su estado tras ocultar el aviso y ofrece reintento, sin rueda infinita. Flechas de sacos suman 1 y peso suma 0.1; escritura manual 0.025 se conserva y al incrementar resulta 0.125, sin stepMismatch.
+
+Las cuatro listas limpian filtros, página y búsquedas de selectores manteniendo la sección. Solicitudes muestra creación en Lima. El filtro separado de definición ya no aparece; En revisión incluye solicitudes APPROVED con ensayos pendientes y Pendiente de ensayos incluye muestras sin ensayos de solicitudes abiertas. Selección múltiple, URL, solicitante/empresa y privacidad conservan los controles de regresión.
+
+Revisión comprobada: decisiones distintas en una transacción, motivo obligatorio al rechazar, no seleccionados pendientes, aprobado continúa disponible y rechazado no admite operaciones. Motivo e historial públicos legibles para el autor, con actor/fecha; no se expone JSON de auditoría. Reenvío conserva ID, limpia la revisión actual y conserva el motivo anterior en historial. Todos rechazados lleva a OBSERVED; reenvío vuelve al estado de envío. Cierre con rechazo resuelto funciona si el trabajo aceptado está resuelto, no faltan ensayos por definir y hay informe.
+
+Seguridad y concurrencia: revisión solo MANAGER, administrador sin ese rol denegado; reenvío solo CLIENT autor, cliente ajeno y técnico denegados. Identificadores externos, lotes incompatibles y duplicados se rechazan sin escritura parcial. Revisiones ya decididas no se modifican; versiones obsoletas generan conflicto. La suite conserva aislamiento de borradores/técnicos, sesiones, PDF y agregados superiores a cien solicitudes.
+
+Bases ficticias de esta entrega: `lab_lc_v6_unit_test`, `lab_lc_v6_test`, `lab_lc_v6_migration_test`. Se pueden eliminar después de revisar; no son bases operativas. Capturas en `.local/review-v6/`, excluidas de publicación. No se cambiaron dependencias: las auditorías históricas más abajo no se presentan como consultas nuevas.
+
+## Pendiente después de publicar
+
+- En una base en versión5, aplicar **solo la nueva sección 5→6** del SQL05; confirmar versión6 y publicar api/client coordinadamente. No ejecutar 01 ni todo el SQL05 sobre esa base. No se requieren nuevas variables ni servicios Azure.
+- Comprobar en Azure login/proxy, cookies, filtros, revisión mixta/reenvío y descargas privadas con cuentas autorizadas. No se han ejecutado comprobaciones sobre recursos desplegados.
+- Los datos reales de nombres no se editaron. Si el nombre registrado contiene «cliente interno» o similar, el administrador debe editarlo para mostrar únicamente el nombre deseado.
+- La impresión física y el zoom nativo 80% continúan con las limitaciones de la revisión histórica; esta actualización no modifica el diseño de etiquetas.
+
+---
+
+# Registro histórico · esquema 5
+
+Ejecutada el **2 de octubre de 2026**, con PostgreSQL local, Azure Functions local y cuentas ficticias. Se conservaron `lab_lc_v3`, las configuraciones privadas originales y los datos de Azure. No se publicaron cambios.
+
+## Resultados de esta actualización
+
+| Comprobación | Resultado |
+|---|---|
+| Backend / pytest | **49 pruebas aprobadas** en `lab_lc_v5_unit_test`, con rollback por prueba. |
+| Frontend / Vitest | **8 pruebas aprobadas**. |
+| Chrome / Playwright | **4 recorridos aprobados** contra Functions 7072 y Vite 5174 aislados. |
+| Ruff / ESLint | Sin errores. |
+| Vite producción | Compilación correcta, 1829 módulos. |
+| SQL 05 | Actualización aislada 3→4→5; aprobado se incorpora sin alterar estados, técnicos ni fechas existentes. |
+| Integridad de migración | Columnas, tipos, nulabilidad y valores predeterminados coinciden con instalación limpia. Repetir la actualización es rechazado. Se conserva la prueba de rollback de cantidades históricas incompatibles con 3→4. |
+| Documentación | Once tablas y **95 campos**; README, Mermaid, SVG y **28 rutas** OpenAPI regenerados desde el esquema instalado. Inventario CSS con **91 reglas de tamaño**, sus variables, selectores y líneas. |
+| Interfaz | Inspección de tablas y filtros, formulario externo compacto, resultados vacíos, acciones al seleccionar, revisión de ensayos y logo/pie. Vistas 1440, 1024 y 768 px; vista cliente a 100 % y simulación CSS de escala 80 %. |
+| Etiquetas | OT inferior izquierda con separador; ausencia de OT indicada con raya. Lotes de 1, 8 y 9, tamaño A4 y dos páginas para nueve etiquetas comprobados. PDF renderizado para inspección visual. |
+
+Cobertura nueva: aprobación parcial con otra muestra sin ensayos; edición específica de selecciones no aprobadas; rechazo de eliminación de ensayos aprobados, operaciones sobre ensayos sin aprobar y versiones obsoletas; segunda aprobación que conserva el inicio del trabajo previo; cierre bloqueado por muestras pendientes. Se mantienen las comprobaciones de permisos, privacidad de borradores, aislamiento de técnicos y agregados sobre más de cien solicitudes.
+
+Filtros verificados: opciones autorizadas por solicitante/empresa, búsqueda sin distinguir mayúsculas, selección con teclado, etiqueta conservada al recargar, estados múltiples y fechas inclusivas de Lima en servidor. Cliente externo sin filtro de proyecto; carga visible y vacío diferenciado. Coordenadas opcionales independientes, decimales válidos y límites de dígitos incorrectos cubiertos por pruebas.
+
+Bases ficticias creadas: `lab_lc_v5_unit_test`, `lab_lc_v5_test` y `lab_lc_v5_migration_test`. Pueden eliminarse después de revisar los resultados; no son las bases operativas. Las capturas y PDF de comprobación están en `.local/review-v5/`, excluido de publicación. No se cambiaron dependencias ni la configuración de Azure; las auditorías históricas de dependencias que siguen abajo no se presentan como consultas nuevas.
+
+## Pendiente después de publicar
+
+- Aplicar **solo la nueva sección 4→5** de SQL 05 si la base ya está en versión 4; publicar API y frontend coordinadamente y comprobar la versión 5. No ejecutar el esquema de instalación sobre una base existente.
+- Comprobar en Azure login/proxy, filtros, aprobación parcial, PDF privado y permisos con cuentas reales autorizadas. Las pruebas locales no validan recursos desplegados.
+- Confirmar en una impresora física A4, escala 100 %, sin ajuste automático, las medidas de etiquetas. La revisión al 80 % usó escala CSS en Chrome; queda pendiente contrastarla con el zoom nativo del navegador del equipo de destino.
+
+---
+
+# Registro histórico · esquema 4
 
 Ejecutada el **1 de octubre de 2026**, hora de Lima, con PostgreSQL local y datos ficticios. No se publicaron paquetes ni se modificaron recursos o datos en Azure. La base local existente lab_lc_v3 y su local.settings.json privado se conservaron.
 

@@ -1,4 +1,4 @@
-"""Exporta contratos, diccionario y ERD desde la esquema 4 instalado (solo lectura)."""
+"""Exporta contratos, diccionario y ERD desde la esquema 6 instalado (solo lectura)."""
 
 import json
 import os
@@ -71,6 +71,7 @@ MEANINGS = {
     "condition": "NOT_RECEIVED, OK, OBSERVED, DAMAGED o INSUFFICIENT. Solo OK permite iniciar, retomar y completar ensayos.",
     "reception_notes": "Observación visible de recepción; obligatoria si la condición recibida no es OK.",
     "sample_id": "Muestra sobre la que se solicita y ejecuta el ensayo.",
+    "review_status": "PENDING, APPROVED o REJECTED. Decisión de revisión separada de la ejecución; nuevos ensayos comienzan PENDING. Motivo, fecha y responsable se conservan en actividad.",
     "assay_id": "Tipo de ensayo del catálogo; no se repite para la misma muestra.",
     "technician_id": "Responsable asignado; usuario activo TECH o MANAGER al asignar.",
     "state": "PENDING, RUNNING, OBSERVED, COMPLETED o CANCELLED.",
@@ -152,7 +153,7 @@ OVERRIDES = {
 }
 
 
-# Esquema 4; diccionario físico en español, sin asignaciones a proyectos.
+# Esquema 6; diccionario físico en español, sin asignaciones a proyectos.
 for obsolete in ("projects", "project_members", "proyectos", "miembros_proyecto"):
     PURPOSE.pop(obsolete, None)
 PURPOSE.update(
@@ -160,7 +161,7 @@ PURPOSE.update(
         "empresas": "Empresas de los solicitantes; como máximo una es interna.",
         "usuarios": "Identidad, contacto, empresa y roles de acceso; no existen asignaciones a proyectos.",
         "solicitudes": "Solicitud del autor; empresa conservada y código externo de proyecto sin FK entre bases.",
-        "migraciones_esquema": "Versiones instaladas, independientes del nombre de la base. El esquema actual es 4.",
+        "migraciones_esquema": "Versiones instaladas, independientes del nombre de la base. El esquema actual es 6.",
     }
 )
 MEANINGS.update(
@@ -186,7 +187,7 @@ OVERRIDES[("solicitudes", "empresa_id")] = (
     "Empresa conservada al crear la solicitud, independiente de cambios posteriores en el usuario. FK empresas.id."
 )
 OVERRIDES[("migraciones_esquema", "version")] = (
-    "Versión instalada, PK. Instalación limpia: 4; una migración conserva además el registro 3."
+    "Versión instalada, PK. Instalación limpia: 6; las migraciones conservan también las versiones previas."
 )
 
 
@@ -213,7 +214,7 @@ def inspect_schema():
         )
     if {c["table_name"] for c in columns} != set(PURPOSE):
         raise RuntimeError(
-            "El exportador requiere exclusivamente las 11 tablas del esquema v4"
+            "El exportador requiere exclusivamente las 11 tablas del esquema v6"
         )
     return columns, foreign, primary
 
@@ -221,7 +222,7 @@ def inspect_schema():
 def export_erd(columns, foreign, primary):
     lines = [
         "---",
-        "title: Laboratorio Lara Consulting · PostgreSQL v4",
+        "title: Laboratorio Lara Consulting · PostgreSQL v6",
         "config:",
         "  theme: neutral",
         "---",
@@ -318,6 +319,9 @@ def export_openapi():
         "requests": v.RequestCreate,
         "requests/{rid}": v.RequestEdit,
         "requests/{rid}/actions": v.Action,
+        "requests/{rid}/assays": v.AssaysEdit,
+        "requests/{rid}/assays/review": v.AssaysReview,
+        "requests/{rid}/assays/resubmit": v.AssaysResubmit,
         "requests/{rid}/receptions": v.Reception,
         "requests/{rid}/tasks": v.TaskUpdate,
         "requests/{rid}/comments": v.Comment,
@@ -334,7 +338,7 @@ def export_openapi():
         "openapi": "3.1.0",
         "info": {
             "title": "Laboratorio Lara Consulting",
-            "version": "4.0.0",
+            "version": "6.0.0",
             "description": "Sesión opaca en cookie lab_session. Escrituras requieren Origin exacto y X-CSRF-Token de GET /session. "
             "ADMIN administra; MANAGER dirige; TECH solo consulta sus solicitudes, muestras y ensayos asignados; CLIENT accede solo a sus propias solicitudes. Borradores exclusivos de su autor. "
             "En Azure, la clave de Functions se agrega exclusivamente en el proxy. version identifica la revisión de la solicitud. "
@@ -352,10 +356,26 @@ def export_openapi():
     }
     queries = {
         "projects": ["scope", "q", "page", "limit"],
-        "requests": ["q", "status", "project", "view", "condition", "page", "limit"],
+        "requests": [
+            "q",
+            "status",
+            "project",
+            "view",
+            "condition",
+            "requester",
+            "organization",
+            "created_from",
+            "created_to",
+            "pending_assays",
+            "page",
+            "limit",
+        ],
+        "filter-options": ["kind", "view", "q", "selected", "page", "limit"],
         "work": [
             "project",
             "request_q",
+            "requester",
+            "organization",
             "request",
             "technician",
             "assay",
@@ -364,8 +384,32 @@ def export_openapi():
             "page",
             "limit",
         ],
-        "reports": ["q", "project", "request", "page", "limit"],
+        "reports": [
+            "q",
+            "project",
+            "request",
+            "requester",
+            "organization",
+            "page",
+            "limit",
+        ],
         "requests/{rid}/print/{kind}": ["sample_ids"],
+    }
+    spec["components"]["schemas"]["SessionView"] = {
+        "type": "object",
+        "properties": {
+            "csrf": {"type": "string"},
+            "user": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "format": "uuid"},
+                    "name": {"type": "string"},
+                    "organization_name": {"type": ["string", "null"]},
+                    "organization_id": {"type": ["string", "null"]},
+                    "roles": {"type": "array", "items": {"type": "string"}},
+                },
+            },
+        },
     }
     spec["components"]["schemas"].update(
         {
@@ -387,6 +431,22 @@ def export_openapi():
                         "type": ["string", "null"],
                         "description": "OT manual por solicitud; requisito de assign/start/resume, junto con aprobación y material cuando corresponda.",
                     },
+                    "approved": {
+                        "type": "boolean",
+                        "description": "Calculado desde review_status=APPROVED; no es una columna física.",
+                    },
+                    "review_status": {
+                        "type": "string",
+                        "enum": ["PENDING", "APPROVED", "REJECTED"],
+                    },
+                    "review_reason": {
+                        "type": "string",
+                        "description": "Motivo público de la última decisión; historial de revisiones preservado.",
+                    },
+                    "can_review": {"type": "boolean"},
+                    "can_resubmit": {"type": "boolean"},
+                    "requester_name": {"type": "string"},
+                    "organization_name": {"type": "string"},
                     "assigned": {
                         "type": "boolean",
                         "description": "Derivado de tecnico_id; no es un estado ni columna duplicada.",
@@ -512,6 +572,14 @@ def export_openapi():
                         ref_template="#/components/schemas/{model}"
                     )
                     spec["components"]["schemas"].update(schema.pop("$defs", {}))
+                    for key, minimum, maximum in (
+                        ("easting", 100000, 1000000),
+                        ("northing", 1000000, 10000000),
+                    ):
+                        if key in schema.get("properties", {}):
+                            schema["properties"][key]["description"] = (
+                                f"Opcional. Valor finito entre {minimum} inclusive y {maximum} exclusivo; decimales admitidos. En edición, históricos sin cambios se conservan."
+                            )
                     spec["components"]["schemas"][model.__name__] = schema
                     op["requestBody"] = {
                         "required": True,
@@ -544,8 +612,26 @@ def export_openapi():
                             }
                         },
                     }
+            if route == "requests/{rid}/assays/review":
+                op["description"] = (
+                    "MANAGER: decisiones individuales, motivo obligatorio al rechazar; versión y transacción atómica. Primera aprobación habilita solicitud; todos rechazados sin aprobaciones previas produce OBSERVED."
+                )
+            if route == "requests/{rid}/assays/resubmit":
+                op["description"] = (
+                    "Autor CLIENT: vuelve a solicitar ensayos rechazados conservando ID e historial. Revisión PENDING; requiere otra aprobación."
+                )
+            if route == "requests/{rid}/actions":
+                op["description"] = (
+                    "La acción legacy approve sin selección devuelve 409: usar /assays/review. Resto de acciones conserva sus reglas."
+                )
             if route == "auth/login":
                 op["security"] = []
+            if route in ("auth/login", "session"):
+                op["responses"]["200"]["content"] = {
+                    "application/json": {
+                        "schema": {"$ref": "#/components/schemas/SessionView"}
+                    }
+                }
             if method == "get":
                 for name in queries.get(route, []):
                     schema = (
@@ -564,6 +650,24 @@ def export_openapi():
                     op["parameters"].append(
                         {"name": name, "in": "query", "schema": schema}
                     )
+                    if name in ("status", "state"):
+                        op["parameters"][-1]["description"] = (
+                            "Uno o varios códigos separados por comas; OR. En requests, SUBMITTED busca revisión pendiente en solicitudes enviadas/abiertas, incluidas APPROVED. WAITING_ASSAYS busca muestras sin ensayos en solicitudes enviadas/abiertas, incluidas APPROVED/OBSERVED. Otros códigos filtran el estado principal. En work, state filtra la ejecución."
+                        )
+                    if name in ("requester", "organization", "selected"):
+                        op["parameters"][-1]["description"] = (
+                            "UUID; filtra únicamente dentro del alcance autorizado. selected obtiene la etiqueta de una opción al recargar."
+                        )
+                    if name in ("created_from", "created_to"):
+                        schema["format"] = "date"
+                        op["parameters"][-1]["description"] = (
+                            "Fecha de creación de solicitud; ambos extremos inclusivos en America/Lima."
+                        )
+                    if name == "pending_assays":
+                        schema["enum"] = ["true", "false"]
+                        op["parameters"][-1]["description"] = (
+                            "Compatibilidad con enlaces anteriores: existencia de muestras autorizadas sin ningún ensayo. Independiente del estado; AND. La interfaz utiliza status=WAITING_ASSAYS."
+                        )
                     if name == "scope":
                         schema["enum"] = ["requests", "catalog"]
                         op["parameters"][-1]["description"] = (
@@ -578,6 +682,55 @@ def export_openapi():
                         op["parameters"][-1]["description"] = (
                             "Obligatorio para labels: 1 a 200 UUID separados por comas, sin duplicados, recibidos y autorizados. PDF A4 2x4, etiquetas 95x68 mm."
                         )
+                if route in ("requests", "reports", "filter-options"):
+                    properties = {
+                        "id": {"type": "string", "format": "uuid"},
+                        "requester_name": {
+                            "type": "string",
+                            "description": "Nombre del autor de la solicitud.",
+                        },
+                        "organization_name": {
+                            "type": "string",
+                            "description": "Empresa guardada en la solicitud; no depende de cambios posteriores del usuario.",
+                        },
+                    }
+                    if route == "requests":
+                        properties.update(
+                            {
+                                "pending_assays": {
+                                    "type": "boolean",
+                                    "description": "Al menos una muestra accesible sin ensayos definidos.",
+                                },
+                                "unapproved_count": {
+                                    "type": "integer",
+                                    "description": "Ensayos accesibles que necesitan aprobación de jefatura.",
+                                },
+                            }
+                        )
+                    if route == "filter-options":
+                        properties = {
+                            "id": {"type": "string", "format": "uuid"},
+                            "name": {"type": "string"},
+                        }
+                    op["responses"]["200"]["content"] = {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "items": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": properties,
+                                        },
+                                    },
+                                    "total": {"type": "integer"},
+                                    "page": {"type": "integer"},
+                                    "limit": {"type": "integer"},
+                                },
+                            }
+                        }
+                    }
                 if route == "work":
                     op["responses"]["200"]["content"] = {
                         "application/json": {
@@ -618,6 +771,12 @@ def export_openapi():
                                             "CLOSED",
                                         ]
                                     },
+                                    "can_edit_assays": {
+                                        "type": "boolean",
+                                        "description": "Autor CLIENT de solicitud aprobada abierta; PUT /requests/{rid}/assays solo modifica selecciones no aprobadas.",
+                                    },
+                                    "undefined_samples": {"type": "integer"},
+                                    "unapproved_count": {"type": "integer"},
                                     "can_edit": {
                                         "type": "boolean",
                                         "description": "Autor CLIENT antes de aprobación; declaración recibida protegida.",
@@ -628,11 +787,11 @@ def export_openapi():
                                     "department": {"type": ["string", "null"]},
                                     "easting": {
                                         "type": ["string", "number", "null"],
-                                        "description": "Opcional.",
+                                        "description": "Opcional e independiente; formato este seis dígitos enteros y norte siete; ambos admiten decimales. Históricos sin cambios se conservan.",
                                     },
                                     "northing": {
                                         "type": ["string", "number", "null"],
-                                        "description": "Opcional.",
+                                        "description": "Opcional e independiente; formato este seis dígitos enteros y norte siete; ambos admiten decimales. Históricos sin cambios se conservan.",
                                     },
                                     "codigo_ot": {"type": ["string", "null"]},
                                     "tasks": {

@@ -1,10 +1,11 @@
+import useErrorNotice from "../hooks/useErrorNotice";
 import { useState } from "react";
 import { api, messageOf } from "../services/api";
 import { Button, Field, ErrorBox } from "./ui";
 export default function WorkOrderForm({ request, onDone }) {
   const [code, setCode] = useState(request.codigo_ot || ""),
     [reason, setReason] = useState(""),
-    [error, setError] = useState(""),
+    [error, setError] = useErrorNotice(),
     [busy, setBusy] = useState(false),
     [editing, setEditing] = useState(false);
   const received = request.samples.some((s) => s.received_at);

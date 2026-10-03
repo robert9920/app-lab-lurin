@@ -1,3 +1,5 @@
+import useErrorNotice from "../hooks/useErrorNotice";
+import NumericInput from "./NumericInput";
 import { useState } from "react";
 import { api, messageOf } from "../services/api";
 import { Badge, Button, Field, ErrorBox, labels } from "./ui";
@@ -9,7 +11,7 @@ export default function ReceptionForm({ request, onDone }) {
     [receiptCode, setReceiptCode] = useState(""),
     [reason, setReason] = useState(""),
     [selected, setSelected] = useState([]),
-    [error, setError] = useState(""),
+    [error, setError] = useErrorNotice(),
     [busy, setBusy] = useState(false);
   const [samples, setSamples] = useState(
     eligible.map((s) => ({
@@ -163,7 +165,9 @@ export default function ReceptionForm({ request, onDone }) {
                   />
                 </Field>
                 <Field label="Sacos recibidos (opcional)">
-                  <input
+                  <NumericInput
+                    integer
+                    increment={1}
                     type="number"
                     step="1"
                     min="1"
@@ -175,7 +179,8 @@ export default function ReceptionForm({ request, onDone }) {
                   />
                 </Field>
                 <Field label="Peso recibido (kg, opcional)">
-                  <input
+                  <NumericInput
+                    increment={0.1}
                     type="number"
                     min="0.001"
                     step="any"

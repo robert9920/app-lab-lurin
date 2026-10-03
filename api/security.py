@@ -40,7 +40,16 @@ def origin_check(req):
 def public_user(user):
     return {
         key: user.get(key)
-        for key in ("id", "name", "email", "roles", "organization_id", "phone", "is_internal")
+        for key in (
+            "id",
+            "name",
+            "email",
+            "roles",
+            "organization_id",
+            "organization_name",
+            "phone",
+            "is_internal",
+        )
     }
 
 
@@ -99,7 +108,7 @@ def session(db, req):
     token = token_from(req)
     user = one(
         db,
-        "SELECT u.*,coalesce(o.es_interna,false) es_interna,s.vence_en,s.ultimo_acceso FROM sesiones s JOIN usuarios u ON u.id=s.usuario_id LEFT JOIN empresas o ON o.id=u.empresa_id\n        WHERE s.hash_token=:hash AND u.activo FOR SHARE OF u",
+        "SELECT u.*,o.nombre organization_name,coalesce(o.es_interna,false) es_interna,s.vence_en,s.ultimo_acceso FROM sesiones s JOIN usuarios u ON u.id=s.usuario_id LEFT JOIN empresas o ON o.id=u.empresa_id\n        WHERE s.hash_token=:hash AND u.activo FOR SHARE OF u",
         hash=digest(token),
     )
     now = datetime.now(timezone.utc)

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Laboratorio Lara Consulting",
-    "version": "4.0.0",
+    "version": "6.0.0",
     "description": "Sesión opaca en cookie lab_session. Escrituras requieren Origin exacto y X-CSRF-Token de GET /session. ADMIN administra; MANAGER dirige; TECH solo consulta sus solicitudes, muestras y ensayos asignados; CLIENT accede solo a sus propias solicitudes. Borradores exclusivos de su autor. En Azure, la clave de Functions se agrega exclusivamente en el proxy. version identifica la revisión de la solicitud. Los lotes de /work son transaccionales. Cada informe se hace visible al confirmar la carga."
   },
   "servers": [
@@ -17,7 +17,14 @@
         "summary": "login",
         "responses": {
           "200": {
-            "description": "Operación completada"
+            "description": "Operación completada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionView"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validación"
@@ -79,7 +86,14 @@
         "summary": "current session",
         "responses": {
           "200": {
-            "description": "Operación completada"
+            "description": "Operación completada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionView"
+                }
+              }
+            }
           },
           "400": {
             "description": "Validación"
@@ -828,7 +842,53 @@
         "summary": "requests",
         "responses": {
           "200": {
-            "description": "Operación completada"
+            "description": "Operación completada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "requester_name": {
+                            "type": "string",
+                            "description": "Nombre del autor de la solicitud."
+                          },
+                          "organization_name": {
+                            "type": "string",
+                            "description": "Empresa guardada en la solicitud; no depende de cambios posteriores del usuario."
+                          },
+                          "pending_assays": {
+                            "type": "boolean",
+                            "description": "Al menos una muestra accesible sin ensayos definidos."
+                          },
+                          "unapproved_count": {
+                            "type": "integer",
+                            "description": "Ensayos accesibles que necesitan aprobación de jefatura."
+                          }
+                        }
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "page": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Validación"
@@ -874,7 +934,8 @@
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Uno o varios códigos separados por comas; OR. En requests, SUBMITTED busca revisión pendiente en solicitudes enviadas/abiertas, incluidas APPROVED. WAITING_ASSAYS busca muestras sin ensayos en solicitudes enviadas/abiertas, incluidas APPROVED/OBSERVED. Otros códigos filtran el estado principal. En work, state filtra la ejecución."
           },
           {
             "name": "project",
@@ -903,6 +964,52 @@
               ]
             },
             "description": "En view=reception, NOT_RECEIVED exige al menos una muestra sin recibir; issues material observado/dañado/insuficiente; NO_OT carece de OT. Incluye solicitudes enviadas sin ensayos; TECH solo aprobadas asignadas."
+          },
+          {
+            "name": "requester",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "UUID; filtra únicamente dentro del alcance autorizado. selected obtiene la etiqueta de una opción al recargar."
+          },
+          {
+            "name": "organization",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "UUID; filtra únicamente dentro del alcance autorizado. selected obtiene la etiqueta de una opción al recargar."
+          },
+          {
+            "name": "created_from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Fecha de creación de solicitud; ambos extremos inclusivos en America/Lima."
+          },
+          {
+            "name": "created_to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Fecha de creación de solicitud; ambos extremos inclusivos en America/Lima."
+          },
+          {
+            "name": "pending_assays",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "description": "Compatibilidad con enlaces anteriores: existencia de muestras autorizadas sin ningún ensayo. Independiente del estado; AND. La interfaz utiliza status=WAITING_ASSAYS."
           },
           {
             "name": "page",
@@ -1020,6 +1127,16 @@
                         "CLOSED"
                       ]
                     },
+                    "can_edit_assays": {
+                      "type": "boolean",
+                      "description": "Autor CLIENT de solicitud aprobada abierta; PUT /requests/{rid}/assays solo modifica selecciones no aprobadas."
+                    },
+                    "undefined_samples": {
+                      "type": "integer"
+                    },
+                    "unapproved_count": {
+                      "type": "integer"
+                    },
                     "can_edit": {
                       "type": "boolean",
                       "description": "Autor CLIENT antes de aprobación; declaración recibida protegida."
@@ -1051,7 +1168,7 @@
                         "number",
                         "null"
                       ],
-                      "description": "Opcional."
+                      "description": "Opcional e independiente; formato este seis dígitos enteros y norte siete; ambos admiten decimales. Históricos sin cambios se conservan."
                     },
                     "northing": {
                       "type": [
@@ -1059,7 +1176,7 @@
                         "number",
                         "null"
                       ],
-                      "description": "Opcional."
+                      "description": "Opcional e independiente; formato este seis dígitos enteros y norte siete; ambos admiten decimales. Históricos sin cambios se conservan."
                     },
                     "codigo_ot": {
                       "type": [
@@ -1285,7 +1402,8 @@
               }
             }
           }
-        }
+        },
+        "description": "La acción legacy approve sin selección devuelve 409: usar /assays/review. Resto de acciones conserva sus reglas."
       }
     },
     "/requests/{rid}/receptions": {
@@ -1601,6 +1719,22 @@
             }
           },
           {
+            "name": "requester",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "UUID; filtra únicamente dentro del alcance autorizado. selected obtiene la etiqueta de una opción al recargar."
+          },
+          {
+            "name": "organization",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "UUID; filtra únicamente dentro del alcance autorizado. selected obtiene la etiqueta de una opción al recargar."
+          },
+          {
             "name": "request",
             "in": "query",
             "schema": {
@@ -1626,7 +1760,8 @@
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Uno o varios códigos separados por comas; OR. En requests, SUBMITTED busca revisión pendiente en solicitudes enviadas/abiertas, incluidas APPROVED. WAITING_ASSAYS busca muestras sin ensayos en solicitudes enviadas/abiertas, incluidas APPROVED/OBSERVED. Otros códigos filtran el estado principal. En work, state filtra la ejecución."
           },
           {
             "name": "metric",
@@ -1844,6 +1979,366 @@
         }
       }
     },
+    "/requests/{rid}/assays": {
+      "put": {
+        "operationId": "edit_assays_put",
+        "summary": "edit assays",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
+          }
+        },
+        "parameters": [
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssaysEdit"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/requests/{rid}/assays/review": {
+      "post": {
+        "operationId": "review_assays_post",
+        "summary": "review assays",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
+          }
+        },
+        "parameters": [
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssaysReview"
+              }
+            }
+          }
+        },
+        "description": "MANAGER: decisiones individuales, motivo obligatorio al rechazar; versión y transacción atómica. Primera aprobación habilita solicitud; todos rechazados sin aprobaciones previas produce OBSERVED."
+      }
+    },
+    "/requests/{rid}/assays/resubmit": {
+      "post": {
+        "operationId": "resubmit_assays_post",
+        "summary": "resubmit assays",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
+          }
+        },
+        "parameters": [
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssaysResubmit"
+              }
+            }
+          }
+        },
+        "description": "Autor CLIENT: vuelve a solicitar ensayos rechazados conservando ID e historial. Revisión PENDING; requiere otra aprobación."
+      }
+    },
+    "/filter-options": {
+      "get": {
+        "operationId": "filter_options_get",
+        "summary": "filter options",
+        "responses": {
+          "200": {
+            "description": "Operación completada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "page": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
+          }
+        },
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "view",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "selected",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "UUID; filtra únicamente dentro del alcance autorizado. selected obtiene la etiqueta de una opción al recargar."
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 30
+            }
+          }
+        ]
+      }
+    },
     "/requests/{rid}/reports": {
       "post": {
         "operationId": "upload_post",
@@ -1939,7 +2434,45 @@
         "summary": "reports",
         "responses": {
           "200": {
-            "description": "Operación completada"
+            "description": "Operación completada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "requester_name": {
+                            "type": "string",
+                            "description": "Nombre del autor de la solicitud."
+                          },
+                          "organization_name": {
+                            "type": "string",
+                            "description": "Empresa guardada en la solicitud; no depende de cambios posteriores del usuario."
+                          }
+                        }
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "page": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Validación"
@@ -1993,6 +2526,22 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "requester",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "UUID; filtra únicamente dentro del alcance autorizado. selected obtiene la etiqueta de una opción al recargar."
+          },
+          {
+            "name": "organization",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "UUID; filtra únicamente dentro del alcance autorizado. selected obtiene la etiqueta de una opción al recargar."
           },
           {
             "name": "page",
@@ -2166,6 +2715,44 @@
       }
     },
     "schemas": {
+      "SessionView": {
+        "type": "object",
+        "properties": {
+          "csrf": {
+            "type": "string"
+          },
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "organization_name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "organization_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "roles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
       "WorkTask": {
         "type": "object",
         "properties": {
@@ -2194,6 +2781,34 @@
               "null"
             ],
             "description": "OT manual por solicitud; requisito de assign/start/resume, junto con aprobación y material cuando corresponda."
+          },
+          "approved": {
+            "type": "boolean",
+            "description": "Calculado desde review_status=APPROVED; no es una columna física."
+          },
+          "review_status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "APPROVED",
+              "REJECTED"
+            ]
+          },
+          "review_reason": {
+            "type": "string",
+            "description": "Motivo público de la última decisión; historial de revisiones preservado."
+          },
+          "can_review": {
+            "type": "boolean"
+          },
+          "can_resubmit": {
+            "type": "boolean"
+          },
+          "requester_name": {
+            "type": "string"
+          },
+          "organization_name": {
+            "type": "string"
           },
           "assigned": {
             "type": "boolean",
@@ -2778,7 +3393,8 @@
               }
             ],
             "default": null,
-            "title": "Easting"
+            "title": "Easting",
+            "description": "Opcional. Valor finito entre 100000 inclusive y 1000000 exclusivo; decimales admitidos. En edición, históricos sin cambios se conservan."
           },
           "northing": {
             "anyOf": [
@@ -2794,7 +3410,8 @@
               }
             ],
             "default": null,
-            "title": "Northing"
+            "title": "Northing",
+            "description": "Opcional. Valor finito entre 1000000 inclusive y 10000000 exclusivo; decimales admitidos. En edición, históricos sin cambios se conservan."
           },
           "samples": {
             "items": {
@@ -2895,7 +3512,8 @@
               }
             ],
             "default": null,
-            "title": "Easting"
+            "title": "Easting",
+            "description": "Opcional. Valor finito entre 100000 inclusive y 1000000 exclusivo; decimales admitidos. En edición, históricos sin cambios se conservan."
           },
           "northing": {
             "anyOf": [
@@ -2911,7 +3529,8 @@
               }
             ],
             "default": null,
-            "title": "Northing"
+            "title": "Northing",
+            "description": "Opcional. Valor finito entre 1000000 inclusive y 10000000 exclusivo; decimales admitidos. En edición, históricos sin cambios se conservan."
           },
           "samples": {
             "items": {
@@ -3332,6 +3951,137 @@
           "codigo_ot"
         ],
         "title": "WorkOrder",
+        "type": "object"
+      },
+      "SampleAssays": {
+        "additionalProperties": false,
+        "properties": {
+          "sample_id": {
+            "format": "uuid",
+            "title": "Sample Id",
+            "type": "string"
+          },
+          "assay_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 40,
+            "title": "Assay Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sample_id",
+          "assay_ids"
+        ],
+        "title": "SampleAssays",
+        "type": "object"
+      },
+      "AssaysEdit": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "exclusiveMinimum": 0,
+            "title": "Version",
+            "type": "integer"
+          },
+          "samples": {
+            "items": {
+              "$ref": "#/components/schemas/SampleAssays"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Samples",
+            "type": "array"
+          }
+        },
+        "required": [
+          "version",
+          "samples"
+        ],
+        "title": "AssaysEdit",
+        "type": "object"
+      },
+      "AssayDecision": {
+        "additionalProperties": false,
+        "properties": {
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "APPROVED",
+              "REJECTED"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "maxLength": 3000,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "decision"
+        ],
+        "title": "AssayDecision",
+        "type": "object"
+      },
+      "AssaysReview": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "exclusiveMinimum": 0,
+            "title": "Version",
+            "type": "integer"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/AssayDecision"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Decisions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "version",
+          "decisions"
+        ],
+        "title": "AssaysReview",
+        "type": "object"
+      },
+      "AssaysResubmit": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "exclusiveMinimum": 0,
+            "title": "Version",
+            "type": "integer"
+          },
+          "task_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Task Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "version",
+          "task_ids"
+        ],
+        "title": "AssaysResubmit",
         "type": "object"
       }
     }

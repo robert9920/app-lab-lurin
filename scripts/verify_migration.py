@@ -17,9 +17,9 @@ def main():
             "Configura TEST_MIGRATION_DATABASE_URL para una base vacía ficticia."
         )
     url = make_url(raw)
-    if url.database != "lab_lc_v4_migration_test":
+    if url.database != "lab_lc_v6_migration_test":
         raise SystemExit(
-            "Solo se admite lab_lc_v4_migration_test; no se alteran otras bases."
+            "Solo se admite lab_lc_v6_migration_test; no se alteran otras bases."
         )
     with psycopg.connect(
         url.set(drivername="postgresql").render_as_string(hide_password=False),
@@ -54,6 +54,17 @@ def main():
             "INSERT INTO muestras(solicitud_id,codigo_cliente,cantidad,unidad) VALUES (%s,'M-HIST',2.5,'kg') RETURNING id",
             (request,),
         ).fetchone()[0]
+        aid = db.execute(
+            "INSERT INTO catalogo_ensayos(codigo,nombre) VALUES ('MIG','Ensayo de migración') RETURNING id"
+        ).fetchone()[0]
+        tid = db.execute(
+            "INSERT INTO ensayos_muestra(muestra_id,ensayo_id) VALUES (%s,%s) RETURNING id",
+            (sample, aid),
+        ).fetchone()[0]
+        before = db.execute(
+            "SELECT tecnico_id,estado_ensayo,inicio_previsto,fin_previsto,iniciado_en,completado_en FROM ensayos_muestra WHERE id=%s",
+            (tid,),
+        ).fetchone()
         migration = (ROOT / "sql/05_actualizacion_solicitudes.sql").read_text(
             encoding="utf-8"
         )
@@ -71,11 +82,70 @@ def main():
             "SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='muestras' AND column_name='peso'"
         ).fetchone()
         db.execute("UPDATE muestras SET cantidad=2 WHERE id=%s", (sample,))
-        db.execute(migration)
+        original, update = migration.split("-- SECCION_ESQUEMA_5", 1)
+        db.execute(original)
         assert (
             db.execute("SELECT max(version) FROM migraciones_esquema").fetchone()[0]
             == 4
         )
+        update5, update6 = update.split("-- SECCION_ESQUEMA_6", 1)
+        db.execute(update5)
+        assert (
+            db.execute(
+                "SELECT aprobado FROM ensayos_muestra WHERE id=%s", (tid,)
+            ).fetchone()[0]
+            is True
+        )
+        assert (
+            db.execute(
+                "SELECT tecnico_id,estado_ensayo,inicio_previsto,fin_previsto,iniciado_en,completado_en FROM ensayos_muestra WHERE id=%s",
+                (tid,),
+            ).fetchone()
+            == before
+        )
+        assert (
+            db.execute("SELECT max(version) FROM migraciones_esquema").fetchone()[0]
+            == 5
+        )
+        aid2 = db.execute(
+            "INSERT INTO catalogo_ensayos(codigo,nombre) VALUES ('MIG2','Ensayo nuevo') RETURNING id"
+        ).fetchone()[0]
+        tid2 = db.execute(
+            "INSERT INTO ensayos_muestra(muestra_id,ensayo_id) VALUES (%s,%s) RETURNING id",
+            (sample, aid2),
+        ).fetchone()[0]
+        snapshot = db.execute(
+            "SELECT id,muestra_id,ensayo_id,tecnico_id,estado_ensayo,inicio_previsto,fin_previsto,iniciado_en,completado_en,observaciones FROM ensayos_muestra ORDER BY id"
+        ).fetchall()
+        db.execute(update6)
+        assert (
+            db.execute("SELECT max(version) FROM migraciones_esquema").fetchone()[0]
+            == 6
+        )
+        assert (
+            db.execute(
+                "SELECT estado_revision FROM ensayos_muestra WHERE id=%s", (tid,)
+            ).fetchone()[0]
+            == "APPROVED"
+        )
+        assert (
+            db.execute(
+                "SELECT estado_revision FROM ensayos_muestra WHERE id=%s", (tid2,)
+            ).fetchone()[0]
+            == "PENDING"
+        )
+        assert (
+            db.execute(
+                "SELECT id,muestra_id,ensayo_id,tecnico_id,estado_ensayo,inicio_previsto,fin_previsto,iniciado_en,completado_en,observaciones FROM ensayos_muestra ORDER BY id"
+            ).fetchall()
+            == snapshot
+        )
+        try:
+            db.execute(update6)
+        except psycopg.errors.RaiseException:
+            db.execute("ROLLBACK")
+        else:
+            raise AssertionError("No debe aplicar 5→6 dos veces.")
         assert db.execute(
             "SELECT proyecto_id,empresa_id FROM solicitudes WHERE id=%s", (request,)
         ).fetchone() == ("PR-HISTORICO", org)

@@ -177,7 +177,7 @@ def render_labels(data):
             ("Prof.", f"{start} – {end} m"),
         ]
         for n, (label, value) in enumerate(fields):
-            baseline = y + height - (26 + n * 7.6) * mm
+            baseline = y + height - (26 + n * 6.8) * mm
             fit(label, x + pad, baseline, 18 * mm, font="Helvetica-Bold")
             # Two wrapped lines at most; shrink very long names within their own row.
             style = getSampleStyleSheet()["BodyText"]
@@ -191,5 +191,8 @@ def render_labels(data):
                 paragraph = Paragraph(escape(str(value)), style)
                 _, h = paragraph.wrap(70 * mm, 7 * mm)
             paragraph.drawOn(pdf, x + 22 * mm, baseline + 8 - h)
+        pdf.setStrokeColor(colors.HexColor("#dbe1e9"))
+        pdf.line(x + pad, y + 8 * mm, x + width - pad, y + 8 * mm)
+        fit("OT: " + (data.get("codigo_ot") or "—"), x + pad, y + 4 * mm, width - 2 * pad, size=7.5)
     pdf.save()
     return stream.getvalue()

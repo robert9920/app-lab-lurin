@@ -38,3 +38,40 @@ DROP TABLE miembros_proyecto;
 DROP TABLE proyectos;
 INSERT INTO migraciones_esquema(version) VALUES(4);
 COMMIT;
+
+
+-- NUEVA SECCIÓN — Actualización de esquema 4 a 5: aprobación parcial de ensayos
+-- SECCION_ESQUEMA_5
+-- Si ya aplicaste 3→4, ejecuta SOLO desde este encabezado hasta el COMMIT final.
+-- No volver a ejecutar el bloque 3→4 de arriba sobre una base con esquema 4.
+BEGIN;
+DO $$ BEGIN
+ IF (SELECT max(version) FROM migraciones_esquema) IS DISTINCT FROM 4 THEN
+  RAISE EXCEPTION 'Se requiere esquema 4; actualización 4→5 ya aplicada o base incompatible';
+ END IF;
+END $$;
+LOCK TABLE solicitudes,ensayos_muestra IN ACCESS EXCLUSIVE MODE;
+ALTER TABLE ensayos_muestra ADD COLUMN aprobado boolean NOT NULL DEFAULT false;
+UPDATE ensayos_muestra a SET aprobado=true
+ FROM muestras m JOIN solicitudes s ON s.id=m.solicitud_id
+ WHERE a.muestra_id=m.id AND s.estado_solicitud IN ('APPROVED','CLOSED');
+INSERT INTO migraciones_esquema(version) VALUES(5);
+COMMIT;
+
+-- NUEVA SECCIÓN — Actualización de esquema 5 a 6: revisión individual de ensayos
+-- SECCION_ESQUEMA_6
+-- Si tu base está en versión 5, ejecuta SOLO esta sección hasta su COMMIT.
+-- No repetir las secciones anteriores ni el esquema de instalación sobre esa base.
+BEGIN;
+LOCK TABLE solicitudes,ensayos_muestra,migraciones_esquema IN ACCESS EXCLUSIVE MODE;
+DO $$ BEGIN
+ IF (SELECT max(version) FROM migraciones_esquema) IS DISTINCT FROM 5 THEN
+  RAISE EXCEPTION 'Se requiere esquema 5; actualización 5→6 ya aplicada o base incompatible';
+ END IF;
+END $$;
+ALTER TABLE ensayos_muestra ADD COLUMN estado_revision text NOT NULL DEFAULT 'PENDING'
+ CHECK(estado_revision IN ('PENDING','APPROVED','REJECTED'));
+UPDATE ensayos_muestra SET estado_revision=CASE WHEN aprobado THEN 'APPROVED' ELSE 'PENDING' END;
+ALTER TABLE ensayos_muestra DROP COLUMN aprobado;
+INSERT INTO migraciones_esquema(version) VALUES(6);
+COMMIT;

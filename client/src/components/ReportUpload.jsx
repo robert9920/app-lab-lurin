@@ -1,10 +1,11 @@
+import useErrorNotice from "../hooks/useErrorNotice";
 import { useState } from "react";
 import { api, messageOf } from "../services/api";
 import { Button, Field, ErrorBox } from "./ui";
 export default function ReportUpload({ request, onDone }) {
   const [file, setFile] = useState(null),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useErrorNotice();
   async function submit(e) {
     e.preventDefault();
     setBusy(true);

@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytest
 from pydantic import ValidationError
+from review_helpers import approve_defined
 
 from database import execute, one
 from errors import AppError
@@ -92,7 +93,7 @@ def test_pending_receipt_edit_ot_approval_and_operational_gates(db, users):
         w.edit_request(
             db, client, rid, RequestEdit(**{**payload, "samples": edited, "version": r["version"]})
         )
-    w.action(db, manager, rid, Action(version=r["version"], action="approve"))
+    approve_defined(db, manager, rid, r["version"])
     r = current(db, manager, rid)
     task = r["tasks"][0]
     assert "assign" in task["allowed_actions"]
@@ -212,7 +213,7 @@ def test_receipt_filter_and_dashboard_include_waiting_requests(db, users):
     assert dash["totals"]["pending_samples"] == expected
 
 
-def test_manage_migrate_recognizes_schema4_without_reinstall(db):
+def test_manage_migrate_recognizes_current_schema_without_reinstall(db):
     import os
     import subprocess
     import sys
@@ -227,5 +228,5 @@ def test_manage_migrate_recognizes_schema4_without_reinstall(db):
         capture_output=True,
     )
     assert result.returncode == 0, "migrate debe aceptar el esquema actual sin reinstalar"
-    assert one(db, "SELECT max(version) version FROM migraciones_esquema")["version"] == 4
+    assert one(db, "SELECT max(version) version FROM migraciones_esquema")["version"] == 6
     assert one(db, "SELECT count(*) n FROM solicitudes")["n"] == before

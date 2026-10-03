@@ -6,6 +6,7 @@ from uuid import uuid4
 import azure.functions as func
 import pytest
 from reportlab.pdfgen import canvas
+from review_helpers import approve_defined
 
 from database import execute, one
 from errors import AppError
@@ -164,7 +165,10 @@ def test_full_service_and_project_isolation(db, users):
         ),
     )["id"]
     for user, action, version in ((users["cliente"], "submit", 1), (users["jefe"], "approve", 2)):
-        w.action(db, user, rid, Action(version=version, action=action))
+        if action == "approve":
+            approve_defined(db, user, rid, version)
+        else:
+            w.action(db, user, rid, Action(version=version, action=action))
     with pytest.raises(AppError):
         w.detail(db, users["externo"], rid)
     data = w.detail(db, users["jefe"], rid)
@@ -254,12 +258,12 @@ def test_dashboard_over_100_requests_and_sql_reconciliation(db, users):
     )
     execute(
         db,
-        "INSERT INTO ensayos_muestra(muestra_id,ensayo_id) SELECT s.id,c.id FROM muestras s CROSS JOIN catalogo_ensayos c\n        WHERE s.codigo_cliente='BATCH' AND c.codigo='HUM'",
+        "INSERT INTO ensayos_muestra(muestra_id,ensayo_id,estado_revision) SELECT s.id,c.id,'APPROVED' FROM muestras s CROSS JOIN catalogo_ensayos c\n        WHERE s.codigo_cliente='BATCH' AND c.codigo='HUM'",
     )
     data = json.loads(invoke("dashboard", headers=identity(db, users["admin"])).get_body())
     expected = one(
         db,
-        "SELECT count(*) n FROM ensayos_muestra a JOIN muestras s ON s.id=a.muestra_id JOIN solicitudes r ON r.id=s.solicitud_id\n        WHERE r.estado_solicitud='APPROVED' AND a.estado_ensayo NOT IN ('COMPLETED','CANCELLED')",
+        "SELECT count(*) n FROM ensayos_muestra a JOIN muestras s ON s.id=a.muestra_id JOIN solicitudes r ON r.id=s.solicitud_id\n        WHERE a.estado_revision='APPROVED' AND r.estado_solicitud='APPROVED' AND a.estado_ensayo NOT IN ('COMPLETED','CANCELLED')",
     )["n"]
     assert data["totals"]["open"] == expected and expected > 130
     assert sum(x["count"] for x in data["by_type"]) == expected

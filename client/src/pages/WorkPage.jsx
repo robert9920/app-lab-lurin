@@ -1,8 +1,18 @@
+import useErrorNotice from "../hooks/useErrorNotice";
+import SearchSelect from "../components/SearchSelect";
+import RequesterFilters from "../components/RequesterFilters";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, messageOf } from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import { PageHead, Field, ErrorBox, Empty, labels } from "../components/ui";
+import {
+  PageHead,
+  ClearFilters,
+  Field,
+  ErrorBox,
+  Loading,
+  labels,
+} from "../components/ui";
 import WorkPanel from "../components/WorkPanel";
 import { Pager } from "./Dashboard";
 export default function WorkPage() {
@@ -14,8 +24,10 @@ export default function WorkPage() {
       technicians: [],
       catalog: [],
     }),
-    [error, setError] = useState(""),
-    [revision, setRevision] = useState(0);
+    [error, setError] = useErrorNotice(),
+    [revision, setRevision] = useState(0),
+    [loading, setLoading] = useState(true);
+  const [filterEpoch, setFilterEpoch] = useState(0);
   const query = params.toString();
   useEffect(() => {
     Promise.all([
@@ -27,10 +39,10 @@ export default function WorkPage() {
         setOptions({ projects: p.data, technicians: t.data, catalog: c.data }),
       )
       .catch((e) => setError(messageOf(e)));
-  }, []);
+  }, [setError]);
   useEffect(() => {
     let live = true;
-    setData(null);
+    setLoading(true);
     api
       .get("/work?" + query)
       .then((r) => {
@@ -41,11 +53,14 @@ export default function WorkPage() {
       })
       .catch((e) => {
         if (live) setError(messageOf(e));
+      })
+      .finally(() => {
+        if (live) setLoading(false);
       });
     return () => {
       live = false;
     };
-  }, [query, revision]);
+  }, [query, revision, setError]);
   function filter(k, v) {
     const p = new URLSearchParams(params);
     v ? p.set(k, v) : p.delete(k);
@@ -64,7 +79,13 @@ export default function WorkPage() {
         <aside className="card form-card filters-panel">
           <details open>
             <summary>Filtros</summary>
-            <div className="form-grid">
+            <div className="filter-actions">
+              <ClearFilters
+                setParams={setParams}
+                onClear={() => setFilterEpoch((n) => n + 1)}
+              />
+            </div>
+            <div className="form-grid" key={filterEpoch}>
               <Field label="Solicitud (código o título)">
                 <input
                   value={params.get("request_q") || ""}
@@ -112,20 +133,15 @@ export default function WorkPage() {
                 )
                 .map(([key, label, items]) => (
                   <Field key={key} label={label}>
-                    <select
+                    <SearchSelect
+                      multiple={key === "state"}
                       value={params.get(key) || ""}
-                      onChange={(e) => filter(key, e.target.value)}
-                    >
-                      <option value="">Todos</option>
-                      {items.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.code ? o.code + " · " : ""}
-                          {o.name}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(v) => filter(key, v)}
+                      options={items}
+                    />
                   </Field>
                 ))}
+              <RequesterFilters params={params} filter={filter} view="work" />
               {params.get("request") && (
                 <Field label="Solicitud seleccionada">
                   <button className="btn" onClick={() => filter("request", "")}>
@@ -136,7 +152,12 @@ export default function WorkPage() {
             </div>
           </details>
         </aside>
-        <section className="card form-card results-panel">
+        <section className="card form-card results-panel" aria-busy={loading}>
+          {loading && (
+            <Loading>
+              {data ? "Actualizando ensayos…" : "Cargando ensayos…"}
+            </Loading>
+          )}
           {data ? (
             <>
               <WorkPanel
@@ -153,9 +174,7 @@ export default function WorkPage() {
               />
               <Pager data={data} params={params} setParams={setParams} />
             </>
-          ) : (
-            <Empty>Cargando ensayos…</Empty>
-          )}
+          ) : null}
         </section>
       </div>
     </>

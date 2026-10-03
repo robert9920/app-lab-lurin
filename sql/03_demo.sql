@@ -48,4 +48,5 @@ SELECT '50000000-0000-0000-0000-000000000009',id,'20000000-0000-0000-0000-000000
 UPDATE empresas SET es_interna=true WHERE id='10000000-0000-0000-0000-000000000001' AND NOT EXISTS(SELECT 1 FROM empresas WHERE es_interna);
 UPDATE solicitudes SET distrito='Lurín',provincia='Lima',departamento='Lima' WHERE codigo LIKE 'SOL-DEMO-%';
 UPDATE solicitudes SET codigo_ot='OT-DEMO-001' WHERE codigo='SOL-DEMO-001' AND codigo_ot IS NULL;
+UPDATE ensayos_muestra a SET estado_revision='APPROVED' FROM muestras m JOIN solicitudes s ON s.id=m.solicitud_id WHERE a.muestra_id=m.id AND s.codigo LIKE 'SOL-DEMO-%' AND s.estado_solicitud IN ('APPROVED','CLOSED');
 COMMIT;

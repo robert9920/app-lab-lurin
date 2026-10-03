@@ -1,9 +1,14 @@
+import useErrorNotice from "../hooks/useErrorNotice";
+import SearchSelect from "../components/SearchSelect";
+import RequesterFilters from "../components/RequesterFilters";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { api, messageOf, download } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import {
   PageHead,
+  ClearFilters,
+  Loading,
   Field,
   ErrorBox,
   Button,
@@ -23,29 +28,41 @@ export default function ReportsPage() {
     [requests, setRequests] = useState([]),
     [request, setRequest] = useState(null),
     [search, setSearch] = useState(""),
-    [error, setError] = useState(""),
+    [error, setError] = useErrorNotice(),
     [revision, setRevision] = useState(0);
+  const readers = user.roles.some((r) =>
+    ["ADMIN", "MANAGER", "TECH"].includes(r),
+  );
+  const [loading, setLoading] = useState(true);
+  const [filterEpoch, setFilterEpoch] = useState(0);
   const query = params.toString();
   useEffect(() => {
     api
       .get("/projects")
       .then((r) => setProjects(r.data))
       .catch((e) => setError(messageOf(e)));
-  }, []);
+  }, [setError]);
   useEffect(() => {
     let live = true;
+    setLoading(true);
     api
       .get("/reports?" + query)
       .then((r) => {
-        if (live) setData(r.data);
+        if (live) {
+          setData(r.data);
+          setError("");
+        }
       })
       .catch((e) => {
         if (live) setError(messageOf(e));
+      })
+      .finally(() => {
+        if (live) setLoading(false);
       });
     return () => {
       live = false;
     };
-  }, [query, revision]);
+  }, [query, revision, setError]);
   useEffect(() => {
     if (staff) {
       let live = true;
@@ -61,7 +78,7 @@ export default function ReportsPage() {
         live = false;
       };
     }
-  }, [staff, search, revision]);
+  }, [staff, search, revision, setError]);
   function filter(k, v) {
     const p = new URLSearchParams(params);
     v ? p.set(k, v) : p.delete(k);
@@ -130,26 +147,35 @@ export default function ReportsPage() {
               </section>
             )}
             <div>
-              <div className="form-grid">
+              <div className="filter-actions">
+                <ClearFilters
+                  setParams={setParams}
+                  onClear={() => setFilterEpoch((n) => n + 1)}
+                />
+              </div>
+              <div className="form-grid" key={filterEpoch}>
                 <Field label="Buscar informe por solicitud o proyecto">
                   <input
                     value={params.get("q") || ""}
                     onChange={(e) => filter("q", e.target.value)}
                   />
                 </Field>
-                <Field label="Proyecto">
-                  <select
-                    value={params.get("project") || ""}
-                    onChange={(e) => filter("project", e.target.value)}
-                  >
-                    <option value="">Todos mis proyectos</option>
-                    {projects.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name !== p.code ? `${p.code} · ${p.name}` : p.code}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
+                {(readers || user.is_internal) && (
+                  <Field label="Proyecto">
+                    <SearchSelect
+                      value={params.get("project") || ""}
+                      onChange={(v) => filter("project", v)}
+                      options={projects}
+                    />
+                  </Field>
+                )}
+                {readers && (
+                  <RequesterFilters
+                    params={params}
+                    filter={filter}
+                    view="reports"
+                  />
+                )}
                 {params.get("request") && (
                   <Button onClick={() => filter("request", "")}>
                     Quitar filtro de solicitud
@@ -159,7 +185,12 @@ export default function ReportsPage() {
             </div>
           </details>
         </aside>
-        <section className="card results-panel">
+        <section className="card results-panel" aria-busy={loading}>
+          {loading && (
+            <Loading>
+              {data ? "Actualizando informes…" : "Cargando informes…"}
+            </Loading>
+          )}
           {data?.items.length ? (
             <div className="table-scroll">
               <table>
@@ -167,8 +198,9 @@ export default function ReportsPage() {
                   <tr>
                     <th>Informe / versión</th>
                     <th>Solicitud / proyecto</th>
+                    {readers && <th>Solicitante / Empresa</th>}
                     <th>Fecha de carga</th>
-                    <th />
+                    <th className="action-column" aria-label="Acciones" />
                   </tr>
                 </thead>
                 <tbody>
@@ -193,8 +225,14 @@ export default function ReportsPage() {
                         </Link>
                         <small className="block">{d.project_code}</small>
                       </td>
+                      {readers && (
+                        <td>
+                          <b>{d.requester_name}</b>
+                          <small className="block">{d.organization_name}</small>
+                        </td>
+                      )}
                       <td>{fmtDate(d.created_at)}</td>
-                      <td>
+                      <td className="action-column">
                         <div className="actions">
                           <Button
                             onClick={() =>
@@ -222,11 +260,7 @@ export default function ReportsPage() {
               </table>
             </div>
           ) : (
-            <Empty>
-              {data
-                ? "No hay informes con estos filtros."
-                : "Cargando informes…"}
-            </Empty>
+            data && <Empty>No hay informes con estos filtros.</Empty>
           )}
           {data && <Pager data={data} params={params} setParams={setParams} />}
         </section>

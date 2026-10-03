@@ -29,10 +29,10 @@ async function general(page, title) {
   ])
     await page.getByLabel(field + " *", { exact: true }).fill(value);
   await expect(
-    page.getByLabel("Coordenada este (opcional)"),
+    page.getByLabel("Coordenadas Este (opcional)"),
   ).not.toHaveAttribute("required");
   await expect(
-    page.getByLabel("Coordenada norte (opcional)"),
+    page.getByLabel("Coordenadas Norte (opcional)"),
   ).not.toHaveAttribute("required");
   await page
     .getByRole("button", { name: "Continuar con las muestras" })

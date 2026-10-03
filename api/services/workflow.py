@@ -10,10 +10,15 @@ from security import (
 )
 from services.common import audit, touch
 from services.projects import validate_code
+from validation import validate_coordinates
 
 
 def allowed_actions(user, task, request_status, codigo_ot=None):
-    if request_status != "APPROVED" or task["state"] in ("COMPLETED", "CANCELLED"):
+    if (
+        not task.get("approved")
+        or request_status != "APPROVED"
+        or task["state"] in ("COMPLETED", "CANCELLED")
+    ):
         return []
     manager = "MANAGER" in user["roles"]
     owner = "TECH" in user["roles"] and task["technician_id"] == user["id"]
@@ -67,7 +72,17 @@ def readable_history(data, user):
                 continue
             if task:
                 lines.append(f"{task['sample_code']} · {task.get('name', task.get('assay_name', 'Ensayo'))}")
-                if raw.get("action") == "assign":
+                if raw.get("action") == "review":
+                    lines.append(
+                        "Aprobado para programación y ejecución"
+                        if raw.get("to") == "APPROVED"
+                        else "Ensayo rechazado"
+                    )
+                elif raw.get("action") == "resubmit":
+                    lines.append("Solicitado nuevamente; pendiente de revisión")
+                elif raw.get("action") == "approve":
+                    lines.append("Aprobado para programación y ejecución")
+                elif raw.get("action") == "assign":
                     lines.append("Responsable: " + raw.get("technician_name", "Asignación actualizada"))
                     lines.append(
                         "Programación: "
@@ -81,6 +96,12 @@ def readable_history(data, user):
                     )
             if raw.get("reason"):
                 lines.append("Motivo: " + raw["reason"])
+        if "sample_id" in raw:
+            sample = samples.get(str(raw["sample_id"]))
+            if technical_only(user) and not sample:
+                continue
+            if sample:
+                lines.append("Muestra: " + sample["client_code"])
         if "samples" in raw:
             changes = [
                 c
@@ -117,6 +138,24 @@ def require_approved(r):
         raise AppError(409, "La solicitud debe estar aprobada.")
 
 
+def review_projection(db, tasks):
+    """Only public review reasons for the already authorized task IDs."""
+    if not tasks:
+        return
+    latest = rows(
+        db,
+        """SELECT DISTINCT ON (detalle->>'task_id') detalle->>'task_id' task_id,
+        coalesce(detalle->>'reason','') reason FROM actividad
+        WHERE NOT interno AND detalle->>'task_id'=ANY(:ids)
+        AND detalle->>'action' IN ('review','resubmit')
+        ORDER BY detalle->>'task_id',id DESC""",
+        ids=[str(t["id"]) for t in tasks],
+    )
+    reasons = {x["task_id"]: x["reason"] for x in latest}
+    for t in tasks:
+        t["review_reason"] = reasons.get(str(t["id"]), "")
+
+
 def detail(db, user, rid):
     r = request_access(db, user, rid)
     organization = one(db, "SELECT nombre,es_interna FROM empresas WHERE id=:id", id=r["organization_id"])
@@ -133,6 +172,7 @@ def detail(db, user, rid):
         "SUBMITTED",
         "OBSERVED",
     )
+    r["can_edit_assays"] = client_request(user, r) and r["status"] == "APPROVED"
     r["samples"] = rows(
         db,
         "SELECT s.*,ARRAY(SELECT ensayo_id FROM ensayos_muestra WHERE muestra_id=s.id) assay_ids\n        FROM muestras s WHERE solicitud_id=:id ORDER BY codigo_cliente",
@@ -154,7 +194,7 @@ def detail(db, user, rid):
     )
     r["activity"] = rows(
         db,
-        "SELECT a.id,a.tipo,a.mensaje,a.interno,a.creado_en,u.nombre actor_name,\n        CASE WHEN :staff THEN a.detalle ELSE '{}'::jsonb END detalle FROM actividad a LEFT JOIN usuarios u ON u.id=a.autor_id\n        WHERE a.solicitud_id=:id AND (:staff OR NOT a.interno) ORDER BY a.id DESC",
+        "SELECT a.id,a.tipo,a.mensaje,a.interno,a.creado_en,u.nombre actor_name,\n        CASE WHEN :staff OR (NOT a.interno AND a.detalle->>'action' IN ('review','resubmit')) THEN a.detalle ELSE '{}'::jsonb END detalle FROM actividad a LEFT JOIN usuarios u ON u.id=a.autor_id\n        WHERE a.solicitud_id=:id AND (:staff OR NOT a.interno) ORDER BY a.id DESC",
         id=rid,
         staff=is_staff(user) and (not technical_only(user) or bool(owned)),
     )
@@ -167,6 +207,22 @@ def detail(db, user, rid):
     for t in r["tasks"]:
         t["assigned"] = t["technician_id"] is not None
         t["allowed_actions"] = allowed_actions(user, t, r["status"], r["codigo_ot"])
+        t["can_review"] = (
+            "MANAGER" in user["roles"]
+            and r["status"] in ("WAITING_ASSAYS", "SUBMITTED", "APPROVED")
+            and t["review_status"] == "PENDING"
+            and t["state"] == "PENDING"
+        )
+        t["can_resubmit"] = (
+            client_request(user, r)
+            and r["status"] in ("WAITING_ASSAYS", "SUBMITTED", "OBSERVED", "APPROVED")
+            and t["review_status"] == "REJECTED"
+        )
+    review_projection(db, r["tasks"])
+    r["undefined_samples"] = sum(not s["assay_ids"] for s in r["samples"])
+    r["unapproved_count"] = sum(
+        t["review_status"] == "PENDING" and t["state"] == "PENDING" for t in r["tasks"]
+    )
     r["activity"] = readable_history(r, user)
     # Internal technical notes are not part of the client projection.
     for t in r["tasks"]:
@@ -204,6 +260,7 @@ def organization_for(db, user):
 
 
 def create_request(db, user, data):
+    validate_coordinates(data)
     require_role(user, "CLIENT")
     org = organization_for(db, user)
     code = validate_code(data.project_id) if org["is_internal"] else "EXTERNO"
@@ -242,6 +299,7 @@ def missing_assays(db, rid):
 def edit_request(db, user, rid, data):
     require_role(user, "CLIENT")
     r = request_access(db, user, rid, data.version)
+    validate_coordinates(data, r)
     if not client_request(user, r) or r["status"] not in ("DRAFT", "WAITING_ASSAYS", "SUBMITTED", "OBSERVED"):
         raise AppError(409, "Solo el autor puede editar una solicitud antes de su aprobación.")
     org = one(db, "SELECT * FROM empresas WHERE id=:id", id=r["organization_id"])
@@ -283,7 +341,10 @@ def edit_request(db, user, rid, data):
         tasks = rows(db, "SELECT * FROM ensayos_muestra WHERE muestra_id=:id", id=sample.id)
         for t in tasks:
             if t["assay_id"] not in sample.assay_ids and (
-                t["technician_id"] or t["started_at"] or t["state"] != "PENDING"
+                t["review_status"] != "PENDING"
+                or t["technician_id"]
+                or t["started_at"]
+                or t["state"] != "PENDING"
             ):
                 raise AppError(409, "No se puede retirar un ensayo asignado o iniciado.")
         changes.append(
@@ -298,7 +359,7 @@ def edit_request(db, user, rid, data):
     for sid in set(existing) - set(ids):
         if existing[sid]["received_at"] or one(
             db,
-            "SELECT 1 FROM ensayos_muestra WHERE muestra_id=:id AND (tecnico_id IS NOT NULL OR iniciado_en IS NOT NULL OR estado_ensayo<>'PENDING')",
+            "SELECT 1 FROM ensayos_muestra WHERE muestra_id=:id AND (estado_revision<>'PENDING' OR tecnico_id IS NOT NULL OR iniciado_en IS NOT NULL OR estado_ensayo<>'PENDING')",
             id=sid,
         ):
             raise AppError(409, "No se puede eliminar una muestra recibida o con trabajo asignado.")
@@ -374,11 +435,62 @@ def edit_request(db, user, rid, data):
     return {"ok": True}
 
 
+def edit_assays(db, user, rid, data):
+    require_role(user, "CLIENT")
+    r = request_access(db, user, rid, data.version)
+    if not client_request(user, r) or r["status"] != "APPROVED":
+        raise AppError(409, "Solo el autor puede solicitar ensayos de una solicitud aprobada abierta.")
+    ids = [s.sample_id for s in data.samples]
+    if len(set(ids)) != len(ids):
+        raise AppError(400, "Muestras repetidas.")
+    for sample in data.samples:
+        if not one(
+            db, "SELECT 1 FROM muestras WHERE id=:sid AND solicitud_id=:rid", sid=sample.sample_id, rid=rid
+        ):
+            raise AppError(404, "Muestra no encontrada.")
+        current = {
+            t["assay_id"]: t
+            for t in rows(db, "SELECT * FROM ensayos_muestra WHERE muestra_id=:id", id=sample.sample_id)
+        }
+        removed = set(current) - set(sample.assay_ids)
+        if any(
+            current[aid]["review_status"] != "PENDING"
+            or current[aid]["state"] != "PENDING"
+            or current[aid]["technician_id"]
+            for aid in removed
+        ):
+            raise AppError(409, "No se pueden retirar ensayos revisados o con trabajo registrado.")
+        for aid in removed:
+            execute(db, "DELETE FROM ensayos_muestra WHERE id=:id", id=current[aid]["id"])
+        for aid in set(sample.assay_ids) - set(current):
+            if not one(db, "SELECT 1 FROM catalogo_ensayos WHERE id=:id AND activo", id=aid):
+                raise AppError(400, "Selecciona ensayos activos del catálogo.")
+            execute(
+                db,
+                "INSERT INTO ensayos_muestra(muestra_id,ensayo_id) VALUES(:sid,:aid)",
+                sid=sample.sample_id,
+                aid=aid,
+            )
+        if removed or set(sample.assay_ids) - set(current):
+            audit(
+                db,
+                user,
+                "Selección de ensayos actualizada; pendiente de aprobación",
+                rid,
+                {"sample_id": sample.sample_id, "assay_ids": sample.assay_ids},
+                internal=False,
+            )
+    touch(db, rid)
+
+
 def action(db, user, rid, data):
     r = request_access(db, user, rid, data.version)
+    if data.action == "approve":
+        require_role(user, "MANAGER")
+        raise AppError(409, "Selecciona los ensayos en Revisar ensayos para aprobarlos individualmente.")
     transitions = {
         "submit": (("DRAFT", "OBSERVED", "WAITING_ASSAYS"), "SUBMITTED"),
-        "approve": (("SUBMITTED",), "APPROVED"),
+        "approve": (("WAITING_ASSAYS", "SUBMITTED", "APPROVED"), "APPROVED"),
         "observe": (("SUBMITTED",), "OBSERVED"),
         "reject": (("SUBMITTED",), "REJECTED"),
         "close": (("APPROVED",), "CLOSED"),
@@ -396,16 +508,21 @@ def action(db, user, rid, data):
         raise AppError(409, "Esta transición no corresponde al estado actual.")
     if data.action in ("observe", "reject") and not data.reason:
         raise AppError(400, "Indica el motivo.")
-    if data.action == "approve" and missing_assays(db, rid):
-        raise AppError(409, "Define los ensayos de todas las muestras antes de aprobar.")
     if data.action == "close":
         pending = one(
             db,
-            "SELECT count(*) n FROM ensayos_muestra a JOIN muestras s ON s.id=a.muestra_id\n            WHERE s.solicitud_id=:id AND a.estado_ensayo NOT IN ('COMPLETED','CANCELLED')",
+            "SELECT count(*) n FROM ensayos_muestra a JOIN muestras s ON s.id=a.muestra_id\n            WHERE s.solicitud_id=:id AND a.estado_revision<>'REJECTED' AND a.estado_ensayo NOT IN ('COMPLETED','CANCELLED')",
             id=rid,
         )["n"]
-        if pending or not one(db, "SELECT 1 FROM informes WHERE solicitud_id=:id", id=rid):
-            raise AppError(409, "Resuelve todos los ensayos y carga un informe antes de cerrar.")
+        if (
+            missing_assays(db, rid)
+            or pending
+            or not one(db, "SELECT 1 FROM informes WHERE solicitud_id=:id", id=rid)
+        ):
+            raise AppError(
+                409,
+                "Define los ensayos de todas las muestras, resuélvelos y carga un informe antes de cerrar.",
+            )
     execute(db, "UPDATE solicitudes SET estado_solicitud=:status WHERE id=:id", status=new, id=rid)
     touch(db, rid)
     audit(
@@ -424,6 +541,127 @@ def action(db, user, rid, data):
         internal=False,
     )
     return {"ok": True}
+
+
+def review_assays(db, user, rid, data):
+    require_role(user, "MANAGER")
+    r = request_access(db, user, rid, data.version)
+    if r["status"] not in ("WAITING_ASSAYS", "SUBMITTED", "APPROVED"):
+        raise AppError(409, "La solicitud debe estar enviada y abierta para revisar sus ensayos.")
+    ids = [x.task_id for x in data.decisions]
+    if len(set(ids)) != len(ids):
+        raise AppError(400, "Ensayos repetidos en la revisión.")
+    for decision in data.decisions:
+        t = one(
+            db,
+            "SELECT a.* FROM ensayos_muestra a JOIN muestras s ON s.id=a.muestra_id WHERE a.id=:id AND s.solicitud_id=:rid",
+            id=decision.task_id,
+            rid=rid,
+        )
+        if not t:
+            raise AppError(404, "Ensayo no encontrado en esta solicitud.")
+        if (
+            t["review_status"] != "PENDING"
+            or t["state"] != "PENDING"
+            or t["technician_id"]
+            or t["started_at"]
+        ):
+            raise AppError(409, "Solo se pueden revisar ensayos pendientes sin trabajo registrado.")
+    for decision in data.decisions:
+        execute(
+            db,
+            "UPDATE ensayos_muestra SET estado_revision=:state WHERE id=:id",
+            state=decision.decision,
+            id=decision.task_id,
+        )
+        audit(
+            db,
+            user,
+            "Ensayo aprobado por jefatura"
+            if decision.decision == "APPROVED"
+            else "Ensayo rechazado por jefatura",
+            rid,
+            {
+                "task_id": decision.task_id,
+                "action": "review",
+                "from": "PENDING",
+                "to": decision.decision,
+                "reason": decision.reason,
+            },
+            internal=False,
+        )
+    statuses = {
+        t["review_status"]
+        for t in rows(
+            db,
+            "SELECT a.estado_revision FROM ensayos_muestra a JOIN muestras s ON s.id=a.muestra_id WHERE s.solicitud_id=:rid",
+            rid=rid,
+        )
+    }
+    new = "APPROVED" if "APPROVED" in statuses else "OBSERVED" if statuses == {"REJECTED"} else r["status"]
+    execute(db, "UPDATE solicitudes SET estado_solicitud=:state WHERE id=:id", state=new, id=rid)
+    touch(db, rid)
+    if new != r["status"]:
+        audit(
+            db,
+            user,
+            "Solicitud aprobada"
+            if new == "APPROVED"
+            else "Solicitud observada; todos los ensayos fueron rechazados",
+            rid,
+            {"from": r["status"], "to": new},
+            internal=False,
+        )
+
+
+def resubmit_assays(db, user, rid, data):
+    require_role(user, "CLIENT")
+    r = request_access(db, user, rid, data.version)
+    if not client_request(user, r) or r["status"] not in (
+        "WAITING_ASSAYS",
+        "SUBMITTED",
+        "OBSERVED",
+        "APPROVED",
+    ):
+        raise AppError(409, "Solo el autor puede volver a solicitar ensayos de una solicitud abierta.")
+    if len(set(data.task_ids)) != len(data.task_ids):
+        raise AppError(400, "Ensayos repetidos.")
+    for tid in data.task_ids:
+        t = one(
+            db,
+            "SELECT a.*,c.activo FROM ensayos_muestra a JOIN muestras s ON s.id=a.muestra_id JOIN catalogo_ensayos c ON c.id=a.ensayo_id WHERE a.id=:id AND s.solicitud_id=:rid",
+            id=tid,
+            rid=rid,
+        )
+        if not t:
+            raise AppError(404, "Ensayo no encontrado en esta solicitud.")
+        if (
+            t["review_status"] != "REJECTED"
+            or t["state"] != "PENDING"
+            or t["technician_id"]
+            or t["started_at"]
+        ):
+            raise AppError(409, "Solo puedes volver a solicitar ensayos rechazados sin trabajo registrado.")
+        if not t["active"]:
+            raise AppError(409, "El ensayo ya no está habilitado en el catálogo.")
+    for tid in data.task_ids:
+        execute(db, "UPDATE ensayos_muestra SET estado_revision='PENDING' WHERE id=:id", id=tid)
+        audit(
+            db,
+            user,
+            "Ensayo solicitado nuevamente",
+            rid,
+            {"task_id": tid, "action": "resubmit", "from": "REJECTED", "to": "PENDING"},
+            internal=False,
+        )
+    if r["status"] == "OBSERVED":
+        execute(
+            db,
+            "UPDATE solicitudes SET estado_solicitud=:state WHERE id=:id",
+            state="WAITING_ASSAYS" if missing_assays(db, rid) else "SUBMITTED",
+            id=rid,
+        )
+    touch(db, rid)
 
 
 def reception(db, user, rid, data):

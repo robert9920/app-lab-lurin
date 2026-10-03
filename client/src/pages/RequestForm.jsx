@@ -1,3 +1,6 @@
+import useErrorNotice from "../hooks/useErrorNotice";
+import AssaysEditor from "../components/AssaysEditor";
+import NumericInput from "../components/NumericInput";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import {
@@ -9,7 +12,14 @@ import {
   Check,
 } from "lucide-react";
 import { api, messageOf } from "../services/api";
-import { PageHead, Button, Field, ErrorBox, Modal } from "../components/ui";
+import {
+  PageHead,
+  Button,
+  Field,
+  ErrorBox,
+  Modal,
+  Loading,
+} from "../components/ui";
 import ProjectSelect from "../components/ProjectSelect";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -29,11 +39,26 @@ const columns = [
   ["weight", "Peso (kg)"],
 ];
 const numbers = ["depth_from", "depth_to", "quantity", "weight"];
+function SampleValueInput({ kind, ...props }) {
+  return ["quantity", "weight"].includes(kind) ? (
+    <NumericInput
+      {...props}
+      integer={kind === "quantity"}
+      increment={kind === "quantity" ? 1 : 0.1}
+    />
+  ) : (
+    <input {...props} />
+  );
+}
 export default function RequestForm() {
   const { id } = useParams(),
     navigate = useNavigate(),
     { user } = useAuth();
-  const [ready, setReady] = useState(!id),
+  const [ready, setReady] = useState(false),
+    [assaysRequest, setAssaysRequest] = useState(null),
+    [reviewedTasks, setReviewedTasks] = useState([]),
+    [originalCoordinates, setOriginalCoordinates] = useState({}),
+    [coordinatesChecked, setCoordinatesChecked] = useState(false),
     [denied, setDenied] = useState(false),
     [catalog, setCatalog] = useState([]),
     [form, setForm] = useState({
@@ -52,7 +77,7 @@ export default function RequestForm() {
     [status, setStatus] = useState("DRAFT"),
     [internal, setInternal] = useState(user.is_internal),
     [step, setStep] = useState(0),
-    [error, setError] = useState(""),
+    [error, setError] = useErrorNotice(),
     [busy, setBusy] = useState(false),
     [paste, setPaste] = useState(false),
     [text, setText] = useState(""),
@@ -65,13 +90,22 @@ export default function RequestForm() {
     ])
       .then(([c, r]) => {
         setCatalog(c.data.filter((a) => a.active));
+        if (r?.data.can_edit_assays) {
+          setCatalog(c.data);
+          setAssaysRequest(r.data);
+          return;
+        }
         if (r) {
           const d = r.data;
+          setReviewedTasks(
+            d.tasks.filter((t) => t.review_status !== "PENDING"),
+          );
           if (!d.can_edit) {
             setDenied(true);
             setError("Esta solicitud ya no admite edición.");
             return;
           }
+          setOriginalCoordinates({ easting: d.easting, northing: d.northing });
           setVersion(d.version);
           setStatus(d.status);
           setInternal(d.is_internal);
@@ -114,7 +148,7 @@ export default function RequestForm() {
         if (id) setDenied(true);
       })
       .finally(() => setReady(true));
-  }, [id]);
+  }, [id, setError]);
   function update(i, k, v) {
     setForm((f) => ({
       ...f,
@@ -126,11 +160,47 @@ export default function RequestForm() {
   }
   const errors = form.samples.map((s) => sampleErrors(s, form.samples));
   const pending = form.samples.filter((s) => !s.assay_ids.length).length;
+  const [cellNotice, setCellNotice] = useErrorNotice();
+  function invalidCoordinate(key) {
+    if (!coordinatesChecked || form[key] === "") return false;
+    if (
+      id &&
+      originalCoordinates[key] != null &&
+      Number(form[key]) === Number(originalCoordinates[key])
+    )
+      return false;
+    const value = Number(form[key]);
+    return (
+      !Number.isFinite(value) ||
+      value < (key === "easting" ? 100000 : 1000000) ||
+      value >= (key === "easting" ? 1000000 : 10000000)
+    );
+  }
   function next(e) {
     e.preventDefault();
+    setCoordinatesChecked(true);
     if (internal && !form.project_id) {
       setError("Selecciona un proyecto disponible.");
       return;
+    }
+    for (const [key, lower, upper, digits] of [
+      ["easting", 100000, 1000000, 6],
+      ["northing", 1000000, 10000000, 7],
+    ]) {
+      if (
+        form[key] === "" ||
+        (id &&
+          Number(form[key]) === Number(originalCoordinates[key]) &&
+          originalCoordinates[key] != null)
+      )
+        continue;
+      const value = Number(form[key]);
+      if (!Number.isFinite(value) || value < lower || value >= upper) {
+        setError(
+          `Coordenadas ${key === "easting" ? "Este" : "Norte"}: debe tener ${digits} dígitos enteros; se permiten decimales.`,
+        );
+        return;
+      }
     }
     setError("");
     setStep(1);
@@ -139,6 +209,7 @@ export default function RequestForm() {
     setShowErrors(true);
     if (errors.some((e) => Object.keys(e).length)) {
       setError("Revisa las celdas marcadas antes de continuar.");
+      setCellNotice("Revisa las celdas");
       return;
     }
     setError("");
@@ -177,7 +248,8 @@ export default function RequestForm() {
     setForm((f) => ({
       ...f,
       samples: f.samples.map((s, i) =>
-        indices.includes(i)
+        indices.includes(i) &&
+        !reviewedTasks.some((t) => t.sample_id === s.id && t.assay_id === aid)
           ? {
               ...s,
               assay_ids: checked
@@ -188,7 +260,9 @@ export default function RequestForm() {
       ),
     }));
   }
-  if (!ready) return <p role="status">Cargando solicitud…</p>;
+  if (!ready) return <Loading>Cargando solicitud y catálogo…</Loading>;
+  if (assaysRequest)
+    return <AssaysEditor request={assaysRequest} catalog={catalog} />;
   if (denied)
     return (
       <>
@@ -227,7 +301,14 @@ export default function RequestForm() {
       <section className="card form-card request-form">
         {step === 0 ? (
           <form onSubmit={next}>
-            <h2>Datos del servicio</h2>
+            <div className="service-heading">
+              <h2>Datos del servicio</h2>
+              {!internal && (
+                <span className="external-service">
+                  Solicitud de cliente externo
+                </span>
+              )}
+            </div>
             <div className="form-grid">
               {internal ? (
                 <ProjectSelect
@@ -235,9 +316,7 @@ export default function RequestForm() {
                   disabled={!!id && status !== "DRAFT"}
                   onChange={(v) => change("project_id", v)}
                 />
-              ) : (
-                <p className="external-service">Solicitud de cliente externo</p>
-              )}
+              ) : null}
               <Field label="Fecha objetivo (opcional)">
                 <input
                   type="date"
@@ -269,13 +348,14 @@ export default function RequestForm() {
                 </Field>
               ))}
               {[
-                ["easting", "Coordenada este"],
-                ["northing", "Coordenada norte"],
+                ["easting", "Coordenadas Este"],
+                ["northing", "Coordenadas Norte"],
               ].map(([k, l]) => (
                 <Field key={k} label={l + " (opcional)"}>
                   <input
                     type="number"
                     step="any"
+                    aria-invalid={invalidCoordinate(k)}
                     value={form[k]}
                     onChange={(e) => change(k, e.target.value)}
                   />
@@ -385,7 +465,8 @@ export default function RequestForm() {
                       </td>
                       {columns.map(([k, l]) => (
                         <td key={k}>
-                          <input
+                          <SampleValueInput
+                            kind={k}
                             aria-label={l + " · fila " + (i + 1)}
                             aria-invalid={showErrors && !!errors[i][k]}
                             readOnly={!!s.received_at}
@@ -403,8 +484,10 @@ export default function RequestForm() {
                             value={s[k]}
                             onChange={(e) => update(i, k, e.target.value)}
                           />
-                          {showErrors && errors[i][k] && (
-                            <small className="cell-error">{errors[i][k]}</small>
+                          {cellNotice && errors[i][k] && (
+                            <ErrorBox inline>
+                              {{ ...cellNotice, message: errors[i][k] }}
+                            </ErrorBox>
                           )}
                         </td>
                       ))}
@@ -418,6 +501,10 @@ export default function RequestForm() {
                               (s.client_code || "fila " + (i + 1))
                             }
                             checked={s.assay_ids.includes(a.id)}
+                            disabled={reviewedTasks.some(
+                              (t) =>
+                                t.sample_id === s.id && t.assay_id === a.id,
+                            )}
                             onChange={(e) =>
                               setAssay(a.id, e.target.checked, [i])
                             }

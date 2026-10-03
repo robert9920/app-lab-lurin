@@ -1,3 +1,5 @@
+import useErrorNotice from "../hooks/useErrorNotice";
+import AssayReviewState from "./AssayReviewState";
 import { useEffect, useState } from "react";
 import { api, messageOf } from "../services/api";
 import { Badge, Button, Field, ErrorBox, Empty, fmtDate } from "./ui";
@@ -11,7 +13,7 @@ export default function WorkPanel({ request, user, onDone, bulk = false }) {
     [start, setStart] = useState(""),
     [end, setEnd] = useState(""),
     [reason, setReason] = useState(""),
-    [error, setError] = useState(""),
+    [error, setError] = useErrorNotice(),
     [busy, setBusy] = useState(false);
   const staff = user.roles.some((r) => ["TECH", "MANAGER"].includes(r)),
     manager = user.roles.includes("MANAGER");
@@ -29,7 +31,7 @@ export default function WorkPanel({ request, user, onDone, bulk = false }) {
         .get("/technicians")
         .then((r) => setTechnicians(r.data))
         .catch((e) => setError(messageOf(e)));
-  }, [manager]);
+  }, [manager, setError]);
   async function apply() {
     setBusy(true);
     setError("");
@@ -76,7 +78,14 @@ export default function WorkPanel({ request, user, onDone, bulk = false }) {
         <h2>Ensayos y programación</h2>
         <span className="muted">{request.tasks.length + " ensayos"}</span>
       </div>
-      <div className="work-layout">
+      {staff && selectable.length > 0 && !selected.length && (
+        <p className="work-hint">
+          Selecciona ensayos para mostrar sus acciones.
+        </p>
+      )}
+      <div
+        className={`work-layout ${staff && selected.length > 0 && request.status !== "CLOSED" ? "" : "no-actions"}`}
+      >
         <div className="work-table">
           {request.tasks.length ? (
             <div className="table-scroll">
@@ -104,6 +113,7 @@ export default function WorkPanel({ request, user, onDone, bulk = false }) {
                       </th>
                     )}
                     <th>Muestra / ensayo</th>
+                    {bulk && <th>Solicitante / Empresa</th>}
                     <th>Estado</th>
                     <th>Técnico</th>
                     <th>Programación</th>
@@ -145,8 +155,19 @@ export default function WorkPanel({ request, user, onDone, bulk = false }) {
                           {t.assay_name || t.name}
                         </small>
                       </td>
+                      {bulk && (
+                        <td>
+                          <b>{t.requester_name}</b>
+                          <small className="block">{t.organization_name}</small>
+                        </td>
+                      )}
                       <td>
                         <Badge state={t.state} />
+                        <AssayReviewState
+                          task={t}
+                          request={request}
+                          onDone={onDone}
+                        />
                       </td>
                       <td>{t.technician_name || "Sin asignar"}</td>
                       <td>
@@ -250,17 +271,6 @@ export default function WorkPanel({ request, user, onDone, bulk = false }) {
               Aplicar a seleccionados
             </Button>
           </div>
-        )}
-        {staff && selected.length === 0 && (
-          <aside className="bulk-panel empty-actions">
-            <h3>Acciones de ensayos</h3>
-            <p>
-              Selecciona uno o varios ensayos para ver las acciones disponibles.
-            </p>
-            <small>
-              Se requiere solicitud aprobada y OT para asignar o iniciar.
-            </small>
-          </aside>
         )}
       </div>
     </>
