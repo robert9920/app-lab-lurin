@@ -75,3 +75,33 @@ UPDATE ensayos_muestra SET estado_revision=CASE WHEN aprobado THEN 'APPROVED' EL
 ALTER TABLE ensayos_muestra DROP COLUMN aprobado;
 INSERT INTO migraciones_esquema(version) VALUES(6);
 COMMIT;
+
+-- NUEVA SECCIÓN — Actualización de esquema 6 a 7: estados de solicitud y resumen de ensayos
+-- SECCION_ESQUEMA_7
+-- Base en versión 6: ejecutar SOLO desde este marcador hasta el COMMIT de esta sección.
+-- Detener la aplicación anterior y respaldar antes. No repetir bloques anteriores ni 01_schema.sql.
+BEGIN;
+LOCK TABLE solicitudes,ensayos_muestra,migraciones_esquema IN ACCESS EXCLUSIVE MODE;
+DO $$ BEGIN
+ IF (SELECT max(version) FROM migraciones_esquema) IS DISTINCT FROM 6 THEN
+  RAISE EXCEPTION 'Se requiere esquema 6; actualización 6→7 ya aplicada o base incompatible';
+ END IF;
+END $$;
+ALTER TABLE solicitudes ADD COLUMN estado_general text NOT NULL DEFAULT 'CREATED'
+ CONSTRAINT solicitudes_estado_general_valido CHECK(estado_general IN ('CREATED','CANCELLED','CLOSED'));
+UPDATE solicitudes SET estado_general=CASE estado_solicitud
+ WHEN 'CLOSED' THEN 'CLOSED' WHEN 'REJECTED' THEN 'CANCELLED' ELSE 'CREATED' END;
+WITH cancelados AS (
+ UPDATE ensayos_muestra a SET estado_ensayo='CANCELLED'
+ FROM muestras m JOIN solicitudes r ON r.id=m.solicitud_id
+ WHERE a.muestra_id=m.id AND r.estado_general='CANCELLED'
+ AND a.estado_revision<>'REJECTED' AND a.estado_ensayo NOT IN ('COMPLETED','CANCELLED')
+ RETURNING a.id,m.solicitud_id
+)
+INSERT INTO actividad(solicitud_id,mensaje,detalle,interno)
+ SELECT solicitud_id,'Ensayo cancelado al actualizar una solicitud previamente rechazada',
+ jsonb_build_object('task_id',id,'action','cancel','to','CANCELLED',
+ 'reason','Solicitud rechazada antes de instalar el esquema 7'),false FROM cancelados;
+-- Se conservan IDs, decisiones, técnicos, fechas, informes y cierres históricos.
+INSERT INTO migraciones_esquema(version) VALUES(7);
+COMMIT;

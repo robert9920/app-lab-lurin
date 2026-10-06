@@ -1,7 +1,11 @@
+import { assayStatuses, countLabel } from "../services/statuses";
 import { useNetworkBusy } from "../services/api";
 import { X, LoaderCircle, Inbox, ArrowUpRight } from "lucide-react";
 import { cloneElement, isValidElement, useId } from "react";
 export const labels = {
+  CREATED: "Creado",
+  PENDING_REVIEW: "Por aprobar",
+  PENDING_EXECUTION: "Pendiente Ejecución",
   DRAFT: "Borrador",
   WAITING_ASSAYS: "Pendiente de ensayos",
   SUBMITTED: "En revisión",
@@ -154,20 +158,59 @@ export function NetworkLoading() {
     </div>
   ) : null;
 }
-export function RequestBadges({ request }) {
+export function RequestBadges({
+  request,
+  includeRequest = true,
+  legacy = false,
+}) {
+  if (legacy)
+    return (
+      <div className="status-stack">
+        <Badge state={request.status} />
+        {request.status === "WAITING_ASSAYS" &&
+          request.unapproved_count > 0 && <Badge state="SUBMITTED" />}
+        {(request.pending_assays || request.undefined_samples > 0) &&
+          request.status !== "WAITING_ASSAYS" && (
+            <Badge state="WAITING_ASSAYS">Ensayos pendientes de definir</Badge>
+          )}
+        {request.status === "APPROVED" && request.unapproved_count > 0 && (
+          <Badge state="PENDING">{request.unapproved_count} por aprobar</Badge>
+        )}
+      </div>
+    );
+  return (
+    <div className="status-stack assay-counts">
+      {includeRequest && <Badge state={request.request_status} />}
+      {assayStatuses.map(({ id }) => {
+        const n = Number(request.assay_counts?.[id] || 0);
+        return n > 0 ? (
+          <Badge key={id} state={id}>
+            {countLabel(id, n)}
+          </Badge>
+        ) : null;
+      })}
+    </div>
+  );
+}
+
+export function ReceptionBadges({ request }) {
+  const conditions = [
+    ["NOT_RECEIVED", "sin recibir", "sin recibir"],
+    ["OBSERVED", "observada", "observadas"],
+    ["DAMAGED", "dañada", "dañadas"],
+    ["INSUFFICIENT", "insuficiente", "insuficientes"],
+  ];
   return (
     <div className="status-stack">
-      <Badge state={request.status} />
-      {request.status === "WAITING_ASSAYS" && request.unapproved_count > 0 && (
-        <Badge state="SUBMITTED" />
-      )}
-      {(request.pending_assays || request.undefined_samples > 0) &&
-        request.status !== "WAITING_ASSAYS" && (
-          <Badge state="WAITING_ASSAYS">Ensayos pendientes de definir</Badge>
-        )}
-      {request.unapproved_count > 0 && request.status === "APPROVED" && (
-        <Badge state="PENDING">{request.unapproved_count} por aprobar</Badge>
-      )}
+      {conditions.map(([state, singular, plural]) => {
+        const n = Number(request.reception_counts?.[state] || 0);
+        return n > 0 ? (
+          <Badge key={state} state={state}>
+            {n} {n === 1 ? singular : plural}
+          </Badge>
+        ) : null;
+      })}
+      {!request.codigo_ot && <Badge state="NOT_RECEIVED">Sin OT</Badge>}
     </div>
   );
 }

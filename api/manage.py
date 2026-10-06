@@ -36,6 +36,8 @@ def main():
             "lab_lc_v5_unit_test",
             "lab_lc_v6_test",
             "lab_lc_v6_unit_test",
+            "lab_lc_v7_test",
+            "lab_lc_v7_unit_test",
         ):
             raise SystemExit(
                 "Este instalador solo admite lab_lc, lab_lc_v3 o una base ficticia de pruebas prevista."
@@ -65,9 +67,12 @@ def main():
                 elif version == 5 and args.command == "migrate":
                     migration = (sql_dir / "05_actualizacion_solicitudes.sql").read_text(encoding="utf-8")
                     conn.execute(migration.split("-- SECCION_ESQUEMA_6", 1)[1])
-                elif version != 6:
+                elif version == 6 and args.command == "migrate":
+                    migration = (sql_dir / "05_actualizacion_solicitudes.sql").read_text(encoding="utf-8")
+                    conn.execute(migration.split("-- SECCION_ESQUEMA_7", 1)[1])
+                elif version != 7:
                     raise SystemExit(
-                        "Versión incompatible; migrate actualiza esquema 3/4/5 a 6. Detén los servidores y respalda antes."
+                        "Versión incompatible; migrate actualiza esquema 3/4/5/6 a 7. Detén los servidores y respalda antes."
                     )
             conn.execute(
                 (sql_dir / ("03_demo.sql" if args.command == "demo" else "02_catalog.sql")).read_text(
@@ -77,7 +82,7 @@ def main():
         print(
             "Datos ficticios preparados; inicializa las contraseñas con password."
             if args.command == "demo"
-            else "Esquema 6 y catálogo preparados."
+            else "Esquema 7 y catálogo preparados."
         )
         return
     from pydantic import EmailStr, TypeAdapter

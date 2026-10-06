@@ -1,4 +1,4 @@
-"""Explicit PostgreSQL esquema 6 → stable HTTP/domain field mapping. SQL itself uses Spanish names."""
+"""Explicit PostgreSQL esquema 7 → stable HTTP/domain field mapping. SQL itself uses Spanish names."""
 
 TABLE_NAMES = {
     "organizations": "empresas",
@@ -31,6 +31,7 @@ FIELD_NAMES = {
     "created_by": "creado_por",
     "title": "titulo",
     "status": "estado_solicitud",
+    "request_status": "estado_general",
     "notes": "observaciones",
     "target_date": "fecha_objetivo",
     "district": "distrito",

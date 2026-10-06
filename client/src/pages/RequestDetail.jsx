@@ -246,40 +246,45 @@ export default function RequestDetail() {
                   </table>
                 </div>
                 <div className="form-actions">
-                  {canRequest && ["DRAFT", "OBSERVED"].includes(r.status) && (
-                    <Button
-                      variant="primary"
-                      busy={busy}
-                      onClick={() => act("submit")}
-                    >
-                      Enviar al laboratorio
-                    </Button>
-                  )}
-                  {manager && r.status === "SUBMITTED" && (
+                  {canRequest &&
+                    r.request_status === "CREATED" &&
+                    ["DRAFT", "OBSERVED"].includes(r.status) && (
+                      <Button
+                        variant="primary"
+                        busy={busy}
+                        onClick={() => act("submit")}
+                      >
+                        Enviar al laboratorio
+                      </Button>
+                    )}
+                  {r.can_cancel && (
                     <>
-                      <Field label="Motivo (observar o rechazar)">
+                      <Field label="Motivo de cancelación">
                         <input
                           value={reason}
                           onChange={(e) => setReason(e.target.value)}
                         />
                       </Field>
+                      {manager && r.status === "SUBMITTED" && (
+                        <Button
+                          busy={busy}
+                          disabled={!reason.trim()}
+                          onClick={() => act("observe")}
+                        >
+                          Observar
+                        </Button>
+                      )}
                       <Button
                         busy={busy}
                         disabled={!reason.trim()}
-                        onClick={() => act("observe")}
+                        onClick={() => act("cancel")}
                       >
-                        Observar
-                      </Button>
-                      <Button
-                        busy={busy}
-                        disabled={!reason.trim()}
-                        onClick={() => act("reject")}
-                      >
-                        Rechazar
+                        Cancelar solicitud
                       </Button>
                     </>
                   )}
                   {manager &&
+                    r.request_status === "CREATED" &&
                     ["WAITING_ASSAYS", "SUBMITTED", "APPROVED"].includes(
                       r.status,
                     ) &&
@@ -292,17 +297,20 @@ export default function RequestDetail() {
                         Revisar ensayos ({r.unapproved_count})
                       </Button>
                     )}
-                  {manager && r.status === "APPROVED" && (
-                    <Button busy={busy} onClick={() => act("close")}>
-                      Cerrar servicio
-                    </Button>
-                  )}
+                  {manager &&
+                    r.request_status === "CREATED" &&
+                    r.status === "APPROVED" && (
+                      <Button busy={busy} onClick={() => act("close")}>
+                        Cerrar servicio
+                      </Button>
+                    )}
                 </div>
               </>
             )}
             {tab === "reception" && (
               <>
                 {manager &&
+                  r.request_status === "CREATED" &&
                   [
                     "WAITING_ASSAYS",
                     "SUBMITTED",
@@ -315,7 +323,8 @@ export default function RequestDetail() {
                       onDone={setR}
                     />
                   )}
-                {(manager || r.samples.some((s) => s.can_receive)) &&
+                {r.request_status === "CREATED" &&
+                (manager || r.samples.some((s) => s.can_receive)) &&
                 [
                   "WAITING_ASSAYS",
                   "SUBMITTED",
@@ -340,26 +349,24 @@ export default function RequestDetail() {
                     ))}
                   </>
                 )}
-                {staff && (manager || r.samples.some((s) => s.can_receive)) && (
+                {staff && (manager || r.samples.some((s) => s.can_print)) && (
                   <fieldset className="label-picker">
                     <legend>Seleccionar etiquetas · 95 × 68 mm · A4</legend>
                     <label className="check-label">
                       <input
                         type="checkbox"
                         checked={
-                          r.samples.some(
-                            (s) => s.received_at && s.can_receive,
-                          ) &&
+                          r.samples.some((s) => s.received_at && s.can_print) &&
                           labelIds.length ===
                             r.samples.filter(
-                              (s) => s.received_at && s.can_receive,
+                              (s) => s.received_at && s.can_print,
                             ).length
                         }
                         onChange={(e) =>
                           setLabelIds(
                             e.target.checked
                               ? r.samples
-                                  .filter((s) => s.received_at && s.can_receive)
+                                  .filter((s) => s.received_at && s.can_print)
                                   .map((s) => s.id)
                               : [],
                           )
@@ -368,7 +375,7 @@ export default function RequestDetail() {
                       Todas las muestras recibidas
                     </label>
                     {r.samples
-                      .filter((s) => s.received_at && s.can_receive)
+                      .filter((s) => s.received_at && s.can_print)
                       .map((s) => (
                         <label className="check-label" key={s.id}>
                           <input
@@ -391,7 +398,7 @@ export default function RequestDetail() {
                     </p>
                   </fieldset>
                 )}
-                {staff && (manager || r.samples.some((s) => s.can_receive)) && (
+                {staff && (manager || r.samples.some((s) => s.can_print)) && (
                   <div className="form-actions">
                     <Button onClick={() => print("receipt")}>
                       Descargar acta actual
@@ -416,7 +423,9 @@ export default function RequestDetail() {
                   Cada carga conserva una versión y queda disponible
                   inmediatamente para las personas autorizadas del proyecto.
                 </p>
-                {(manager || r.samples.some((s) => s.can_receive)) &&
+                {r.request_status === "CREATED" &&
+                  (manager || r.samples.some((s) => s.can_receive)) &&
+                  r.request_status === "CREATED" &&
                   r.status === "APPROVED" && (
                     <ReportUpload
                       request={r}
@@ -467,7 +476,7 @@ export default function RequestDetail() {
             {tab === "history" && (
               <>
                 <h2>Historial y comentarios</h2>
-                {canWrite && r.status !== "CLOSED" && (
+                {canWrite && r.request_status === "CREATED" && (
                   <form onSubmit={addComment}>
                     <Field label="Comentario">
                       <textarea
@@ -478,6 +487,7 @@ export default function RequestDetail() {
                       />
                     </Field>
                     {staff &&
+                      r.request_status === "CREATED" &&
                       (manager || r.samples.some((s) => s.can_receive)) && (
                         <label className="check-label">
                           <input

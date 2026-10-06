@@ -147,7 +147,9 @@ def request_access(db, user, rid, version=None, allow_closed=False):
     if version is not None:
         if request["version"] != version:
             raise AppError(409, "La solicitud cambió. Recarga antes de guardar.")
-        if request["status"] == "CLOSED" and not allow_closed:
+        if request["request_status"] == "CANCELLED":
+            raise AppError(409, "La solicitud está cancelada.")
+        if request["request_status"] == "CLOSED" and not allow_closed:
             raise AppError(409, "La solicitud está cerrada.")
     return request
 

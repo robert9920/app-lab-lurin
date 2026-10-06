@@ -6,10 +6,12 @@ from security import (
     laboratory_access,
     request_access,
     require_role,
+    scope_params,
     technical_only,
 )
 from services.common import audit, touch
 from services.projects import validate_code
+from services.statuses import assay_case, request_counts
 from validation import validate_coordinates
 
 
@@ -166,13 +168,23 @@ def detail(db, user, rid):
         "name": r["project_id"],
         "organization_name": organization["name"],
     }
-    r["can_edit"] = client_request(user, r) and r["status"] in (
-        "DRAFT",
-        "WAITING_ASSAYS",
-        "SUBMITTED",
-        "OBSERVED",
+    r["can_cancel"] = r["request_status"] == "CREATED" and (
+        client_request(user, r) or "MANAGER" in user["roles"]
     )
-    r["can_edit_assays"] = client_request(user, r) and r["status"] == "APPROVED"
+    r["can_edit"] = (
+        r["request_status"] == "CREATED"
+        and client_request(user, r)
+        and r["status"]
+        in (
+            "DRAFT",
+            "WAITING_ASSAYS",
+            "SUBMITTED",
+            "OBSERVED",
+        )
+    )
+    r["can_edit_assays"] = (
+        r["request_status"] == "CREATED" and client_request(user, r) and r["status"] == "APPROVED"
+    )
     r["samples"] = rows(
         db,
         "SELECT s.*,ARRAY(SELECT ensayo_id FROM ensayos_muestra WHERE muestra_id=s.id) assay_ids\n        FROM muestras s WHERE solicitud_id=:id ORDER BY codigo_cliente",
@@ -180,13 +192,16 @@ def detail(db, user, rid):
     )
     r["tasks"] = rows(
         db,
-        "SELECT a.*,s.codigo_cliente sample_code,s.condicion,c.nombre,c.codigo assay_code,u.nombre technician_name\n        FROM ensayos_muestra a JOIN muestras s ON s.id=a.muestra_id JOIN catalogo_ensayos c ON c.id=a.ensayo_id\n        LEFT JOIN usuarios u ON u.id=a.tecnico_id WHERE s.solicitud_id=:id ORDER BY s.codigo_cliente,c.nombre",
+        "SELECT a.*,("
+        + assay_case()
+        + ") assay_status,s.codigo_cliente sample_code,s.condicion,c.nombre,c.codigo assay_code,u.nombre technician_name\n        FROM ensayos_muestra a JOIN muestras s ON s.id=a.muestra_id JOIN catalogo_ensayos c ON c.id=a.ensayo_id\n        LEFT JOIN usuarios u ON u.id=a.tecnico_id WHERE s.solicitud_id=:id ORDER BY s.codigo_cliente,c.nombre",
         id=rid,
     )
     client_view = client_request(user, r)
     owned = {t["sample_id"] for t in r["tasks"] if t["technician_id"] == user["id"]}
     for s in r["samples"]:
-        s["can_receive"] = "MANAGER" in user["roles"] or ("TECH" in user["roles"] and s["id"] in owned)
+        s["can_print"] = "MANAGER" in user["roles"] or ("TECH" in user["roles"] and s["id"] in owned)
+        s["can_receive"] = r["request_status"] == "CREATED" and s["can_print"]
     r["reports"] = rows(
         db,
         "SELECT id,solicitud_id,version,nombre,tamano_bytes,creado_en,subido_por FROM informes\n        WHERE solicitud_id=:id ORDER BY version DESC",
@@ -206,15 +221,19 @@ def detail(db, user, rid):
             s["assay_ids"] = [t["assay_id"] for t in r["tasks"] if t["sample_id"] == s["id"]]
     for t in r["tasks"]:
         t["assigned"] = t["technician_id"] is not None
-        t["allowed_actions"] = allowed_actions(user, t, r["status"], r["codigo_ot"])
+        t["allowed_actions"] = (
+            allowed_actions(user, t, r["status"], r["codigo_ot"]) if r["request_status"] == "CREATED" else []
+        )
         t["can_review"] = (
             "MANAGER" in user["roles"]
+            and r["request_status"] == "CREATED"
             and r["status"] in ("WAITING_ASSAYS", "SUBMITTED", "APPROVED")
             and t["review_status"] == "PENDING"
             and t["state"] == "PENDING"
         )
         t["can_resubmit"] = (
             client_request(user, r)
+            and r["request_status"] == "CREATED"
             and r["status"] in ("WAITING_ASSAYS", "SUBMITTED", "OBSERVED", "APPROVED")
             and t["review_status"] == "REJECTED"
         )
@@ -222,6 +241,9 @@ def detail(db, user, rid):
     r["undefined_samples"] = sum(not s["assay_ids"] for s in r["samples"])
     r["unapproved_count"] = sum(
         t["review_status"] == "PENDING" and t["state"] == "PENDING" for t in r["tasks"]
+    )
+    r["assay_counts"] = request_counts(
+        db, rid, {**scope_params(user), "all_samples": not technical_only(user) or client_view}
     )
     r["activity"] = readable_history(r, user)
     # Internal technical notes are not part of the client projection.
@@ -488,6 +510,33 @@ def action(db, user, rid, data):
     if data.action == "approve":
         require_role(user, "MANAGER")
         raise AppError(409, "Selecciona los ensayos en Revisar ensayos para aprobarlos individualmente.")
+    if data.action == "cancel":
+        if not (client_request(user, r) or "MANAGER" in user["roles"]):
+            raise AppError(403, "Solo el autor o jefatura pueden cancelar la solicitud.")
+        if not data.reason:
+            raise AppError(400, "Indica el motivo de cancelación.")
+        cancelled = rows(
+            db,
+            "UPDATE ensayos_muestra a SET estado_ensayo='CANCELLED' FROM muestras s "
+            "WHERE a.muestra_id=s.id AND s.solicitud_id=:id AND a.estado_revision<>'REJECTED' "
+            "AND a.estado_ensayo NOT IN ('COMPLETED','CANCELLED') RETURNING a.id",
+            id=rid,
+        )
+        for task in cancelled:
+            audit(
+                db,
+                user,
+                "Ensayo cancelado por cancelación de solicitud",
+                rid,
+                {"task_id": task["id"], "action": "cancel", "to": "CANCELLED", "reason": data.reason},
+                internal=False,
+            )
+        execute(db, "UPDATE solicitudes SET estado_general='CANCELLED' WHERE id=:id", id=rid)
+        touch(db, rid)
+        audit(db, user, "Solicitud cancelada: " + data.reason, rid, {"reason": data.reason}, internal=False)
+        return
+    if data.action == "reject":
+        raise AppError(409, "Usa Cancelar solicitud o revisa los ensayos individualmente.")
     transitions = {
         "submit": (("DRAFT", "OBSERVED", "WAITING_ASSAYS"), "SUBMITTED"),
         "approve": (("WAITING_ASSAYS", "SUBMITTED", "APPROVED"), "APPROVED"),
@@ -516,14 +565,21 @@ def action(db, user, rid, data):
         )["n"]
         if (
             missing_assays(db, rid)
+            or not one(
+                db,
+                "SELECT 1 FROM ensayos_muestra a JOIN muestras s ON s.id=a.muestra_id WHERE s.solicitud_id=:id AND a.estado_revision='APPROVED' AND a.estado_ensayo='COMPLETED'",
+                id=rid,
+            )
             or pending
             or not one(db, "SELECT 1 FROM informes WHERE solicitud_id=:id", id=rid)
         ):
             raise AppError(
                 409,
-                "Define los ensayos de todas las muestras, resuélvelos y carga un informe antes de cerrar.",
+                "Completa al menos un ensayo, define los ensayos de todas las muestras, resuelve el trabajo pendiente y carga un informe antes de cerrar.",
             )
     execute(db, "UPDATE solicitudes SET estado_solicitud=:status WHERE id=:id", status=new, id=rid)
+    if data.action == "close":
+        execute(db, "UPDATE solicitudes SET estado_general='CLOSED' WHERE id=:id", id=rid)
     touch(db, rid)
     audit(
         db,

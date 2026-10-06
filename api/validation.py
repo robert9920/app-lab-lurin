@@ -115,7 +115,7 @@ def validate_coordinates(data, previous=None):
 
 
 class Action(Version):
-    action: Literal["submit", "approve", "observe", "reject", "close"]
+    action: Literal["submit", "approve", "observe", "reject", "close", "cancel"]
     reason: str = Field(default="", max_length=3000)
 
 

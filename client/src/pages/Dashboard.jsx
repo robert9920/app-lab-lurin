@@ -1,3 +1,4 @@
+import { assayStatuses, requestStatuses } from "../services/statuses";
 import useErrorNotice from "../hooks/useErrorNotice";
 import SearchSelect from "../components/SearchSelect";
 import RequesterFilters from "../components/RequesterFilters";
@@ -10,6 +11,7 @@ import {
   ClearFilters,
   Loading,
   RequestBadges,
+  ReceptionBadges,
   Badge,
   Empty,
   ErrorBox,
@@ -63,7 +65,17 @@ export function RequestList({ mode = "requests" }) {
     [loading, setLoading] = useState(true);
   const [filterEpoch, setFilterEpoch] = useState(0);
   const reception = mode === "reception";
-  const query = params.toString();
+  const queryParams = new URLSearchParams(params);
+  if (reception && queryParams.has("status")) {
+    queryParams.delete("status");
+    queryParams.delete("page");
+  }
+  const query = queryParams.toString();
+  useEffect(() => {
+    if (reception && params.has("status")) {
+      setParams(new URLSearchParams(query), { replace: true });
+    }
+  }, [params, query, reception, setParams]);
   useEffect(() => {
     api
       .get("/projects")
@@ -162,21 +174,26 @@ export function RequestList({ mode = "requests" }) {
                   />
                 </Field>
               )}
-              <Field label="Estado">
-                <SearchSelect
-                  multiple
-                  value={params.get("status") || ""}
-                  onChange={(v) => filter("status", v)}
-                  options={[
-                    ...(!staff && !reception ? ["DRAFT"] : []),
-                    "WAITING_ASSAYS",
-                    "SUBMITTED",
-                    "OBSERVED",
-                    "APPROVED",
-                    ...(!reception ? ["REJECTED", "CLOSED"] : []),
-                  ].map((id) => ({ id, name: labels[id] }))}
-                />
-              </Field>
+              {!reception && (
+                <>
+                  <Field label="Estado Ensayo">
+                    <SearchSelect
+                      multiple
+                      options={assayStatuses}
+                      value={params.get("assay_status") || ""}
+                      onChange={(v) => filter("assay_status", v)}
+                    />
+                  </Field>
+                  <Field label="Estado Solicitud">
+                    <SearchSelect
+                      multiple
+                      options={requestStatuses}
+                      value={params.get("request_status") || ""}
+                      onChange={(v) => filter("request_status", v)}
+                    />
+                  </Field>
+                </>
+              )}
               {!reception && (
                 <>
                   {[
@@ -209,7 +226,12 @@ export function RequestList({ mode = "requests" }) {
                   <tr>
                     <th>Solicitud / proyecto</th>
                     {staff && <th>Solicitante / Empresa</th>}
-                    <th>Estado</th>
+                    <th
+                      className={reception ? undefined : "assay-status-column"}
+                    >
+                      {reception ? "Estado Recepción" : "Estado Ensayo"}
+                    </th>
+                    {!reception && <th>Estado Solicitud</th>}
                     <th>
                       {reception ? "Muestras por atender" : "Avance de ensayos"}
                     </th>
@@ -241,9 +263,22 @@ export function RequestList({ mode = "requests" }) {
                           <small className="block">{r.organization_name}</small>
                         </td>
                       )}
-                      <td>
-                        <RequestBadges request={r} />
+                      <td
+                        className={
+                          reception ? undefined : "assay-status-column"
+                        }
+                      >
+                        {reception ? (
+                          <ReceptionBadges request={r} />
+                        ) : (
+                          <RequestBadges request={r} includeRequest={false} />
+                        )}
                       </td>
+                      {!reception && (
+                        <td>
+                          <Badge state={r.request_status} />
+                        </td>
+                      )}
                       <td>
                         {reception ? (
                           r.pending_samples
@@ -367,7 +402,11 @@ export default function Dashboard() {
               [data.totals.open, "Ensayos abiertos", "/work?metric=open"],
               [data.totals.overdue, "Ensayos vencidos", "/work?metric=overdue"],
               data.personal
-                ? [data.totals.running, "En ejecución", "/work?state=RUNNING"]
+                ? [
+                    data.totals.running,
+                    "En ejecución",
+                    "/work?assay_status=RUNNING",
+                  ]
                 : [
                     data.totals.unassigned,
                     "Sin técnico asignado",
@@ -377,7 +416,7 @@ export default function Dashboard() {
                 ? [
                     data.totals.observed,
                     "Ensayos observados",
-                    "/work?state=OBSERVED",
+                    "/work?assay_status=OBSERVED",
                   ]
                 : [
                     data.totals.pending_samples,
@@ -461,7 +500,8 @@ export default function Dashboard() {
                   className="bar-row"
                   to={
                     data.personal
-                      ? "/work?metric=open&state=" + t.id
+                      ? "/work?metric=open&assay_status=" +
+                        (t.id === "PENDING" ? "PENDING_EXECUTION" : t.id)
                       : "/work?metric=open&technician=" + (t.id || "unassigned")
                   }
                 >

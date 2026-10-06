@@ -76,7 +76,7 @@ def reports(db, req):
     u = session(db, req)
     where = (
         SCOPE
-        + " AND (:project='' OR r.proyecto_id::text=:project) AND (:request='' OR r.id::text=:request) AND (r.codigo ILIKE :q OR r.proyecto_id ILIKE :q OR r.titulo ILIKE :q)"
+        + " AND (:project='' OR r.proyecto_id::text=:project) AND (:request='' OR r.id::text=:request) AND (r.codigo ILIKE :q OR r.titulo ILIKE :q)"
     )
     params = {
         **scope_params(u),
@@ -122,7 +122,7 @@ def print_document(db, req):
         raise AppError(404, "Documento no disponible.")
     data = detail(db, u, uid(req.route_params["rid"]))
     laboratory_access(db, u, data["id"])
-    data["samples"] = [s for s in data["samples"] if s["can_receive"]]
+    data["samples"] = [s for s in data["samples"] if s["can_print"]]
     if kind == "labels":
         ids = req.params.get("sample_ids", "").split(",")
         if not ids or not all(ids) or len(ids) > 200:

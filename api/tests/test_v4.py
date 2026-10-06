@@ -228,5 +228,5 @@ def test_manage_migrate_recognizes_current_schema_without_reinstall(db):
         capture_output=True,
     )
     assert result.returncode == 0, "migrate debe aceptar el esquema actual sin reinstalar"
-    assert one(db, "SELECT max(version) version FROM migraciones_esquema")["version"] == 6
+    assert one(db, "SELECT max(version) version FROM migraciones_esquema")["version"] == 7
     assert one(db, "SELECT count(*) n FROM solicitudes")["n"] == before

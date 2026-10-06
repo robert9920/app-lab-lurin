@@ -49,4 +49,7 @@ UPDATE empresas SET es_interna=true WHERE id='10000000-0000-0000-0000-0000000000
 UPDATE solicitudes SET distrito='Lurín',provincia='Lima',departamento='Lima' WHERE codigo LIKE 'SOL-DEMO-%';
 UPDATE solicitudes SET codigo_ot='OT-DEMO-001' WHERE codigo='SOL-DEMO-001' AND codigo_ot IS NULL;
 UPDATE ensayos_muestra a SET estado_revision='APPROVED' FROM muestras m JOIN solicitudes s ON s.id=m.solicitud_id WHERE a.muestra_id=m.id AND s.codigo LIKE 'SOL-DEMO-%' AND s.estado_solicitud IN ('APPROVED','CLOSED');
+UPDATE solicitudes SET estado_general=CASE estado_solicitud
+ WHEN 'CLOSED' THEN 'CLOSED' WHEN 'REJECTED' THEN 'CANCELLED' ELSE 'CREATED' END
+ WHERE codigo LIKE 'SOL-DEMO-%' AND estado_general='CREATED';
 COMMIT;

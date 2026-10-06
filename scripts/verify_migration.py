@@ -17,9 +17,9 @@ def main():
             "Configura TEST_MIGRATION_DATABASE_URL para una base vacía ficticia."
         )
     url = make_url(raw)
-    if url.database != "lab_lc_v6_migration_test":
+    if url.database != "lab_lc_v7_migration_test":
         raise SystemExit(
-            "Solo se admite lab_lc_v6_migration_test; no se alteran otras bases."
+            "Solo se admite lab_lc_v7_migration_test; no se alteran otras bases."
         )
     with psycopg.connect(
         url.set(drivername="postgresql").render_as_string(hide_password=False),
@@ -89,6 +89,7 @@ def main():
             == 4
         )
         update5, update6 = update.split("-- SECCION_ESQUEMA_6", 1)
+        update6, update7 = update6.split("-- SECCION_ESQUEMA_7", 1)
         db.execute(update5)
         assert (
             db.execute(
@@ -146,6 +147,44 @@ def main():
             db.execute("ROLLBACK")
         else:
             raise AssertionError("No debe aplicar 5→6 dos veces.")
+        closed = db.execute(
+            "INSERT INTO solicitudes(proyecto_id,empresa_id,creado_por,titulo,estado_solicitud) VALUES ('PR-HISTORICO',%s,%s,'Cerrada histórica sin completados','CLOSED') RETURNING id",
+            (org, user),
+        ).fetchone()[0]
+        rejected = db.execute(
+            "INSERT INTO solicitudes(proyecto_id,empresa_id,creado_por,titulo,estado_solicitud) VALUES ('PR-HISTORICO',%s,%s,'Rechazada histórica','REJECTED') RETURNING id",
+            (org, user),
+        ).fetchone()[0]
+        legacy = []
+        for code, execution, review in (("RUN", "RUNNING", "APPROVED"), ("DONE", "COMPLETED", "APPROVED"), ("DECLINED", "PENDING", "REJECTED")):
+            sid = db.execute("INSERT INTO muestras(solicitud_id,codigo_cliente) VALUES (%s,%s) RETURNING id", (rejected, code)).fetchone()[0]
+            legacy.append(db.execute(
+                "INSERT INTO ensayos_muestra(muestra_id,ensayo_id,tecnico_id,estado_revision,estado_ensayo,iniciado_en,completado_en) VALUES (%s,%s,%s,%s,%s,now(),CASE WHEN %s='COMPLETED' THEN now() ELSE NULL END) RETURNING id,tecnico_id,iniciado_en,completado_en,estado_revision",
+                (sid, aid, user, review, execution, execution),
+            ).fetchone())
+        report = db.execute(
+            "INSERT INTO informes(solicitud_id,version,nombre,clave_archivo,sha256,tamano_bytes,subido_por) VALUES (%s,1,'Histórico.pdf','historico/migracion.pdf','ficticio',10,%s) RETURNING id,clave_archivo",
+            (rejected, user),
+        ).fetchone()
+        db.execute(update7)
+        assert db.execute("SELECT max(version) FROM migraciones_esquema").fetchone()[0] == 7
+        assert db.execute("SELECT estado_general FROM solicitudes WHERE id=%s", (request,)).fetchone()[0] == 'CREATED'
+        assert db.execute("SELECT estado_general FROM solicitudes WHERE id=%s", (closed,)).fetchone()[0] == 'CLOSED'
+        assert db.execute("SELECT estado_general FROM solicitudes WHERE id=%s", (rejected,)).fetchone()[0] == 'CANCELLED'
+        for original, state in zip(legacy, ('CANCELLED', 'COMPLETED', 'PENDING')):
+            assert db.execute("SELECT id,tecnico_id,iniciado_en,completado_en,estado_revision FROM ensayos_muestra WHERE id=%s", (original[0],)).fetchone() == original
+            assert db.execute("SELECT estado_ensayo FROM ensayos_muestra WHERE id=%s", (original[0],)).fetchone()[0] == state
+        assert db.execute("SELECT id,clave_archivo FROM informes WHERE solicitud_id=%s", (rejected,)).fetchone() == report
+        assert db.execute("SELECT count(*) FROM actividad WHERE solicitud_id=%s", (rejected,)).fetchone()[0] == 1
+        assert db.execute(
+            "SELECT id,muestra_id,ensayo_id,tecnico_id,estado_ensayo,inicio_previsto,fin_previsto,iniciado_en,completado_en,observaciones FROM ensayos_muestra WHERE id IN (%s,%s) ORDER BY id", (tid, tid2),
+        ).fetchall() == snapshot
+        try:
+            db.execute(update7)
+        except psycopg.errors.RaiseException:
+            db.execute("ROLLBACK")
+        else:
+            raise AssertionError("No debe aplicar 6→7 dos veces.")
         assert db.execute(
             "SELECT proyecto_id,empresa_id FROM solicitudes WHERE id=%s", (request,)
         ).fetchone() == ("PR-HISTORICO", org)

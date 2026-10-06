@@ -15,6 +15,7 @@ from security import (
 from services import workflow as w
 from services.common import audit, touch
 from services.filters import TASK_STATES, UNDEFINED, request_filters, request_state_filter, state_filter
+from services.statuses import assay_case, assay_filter, counts_sql, lifecycle_filter, normalize_counts
 from validation import (
     Action,
     AssaysEdit,
@@ -32,7 +33,7 @@ from validation import (
 bp = func.Blueprint()
 SCOPE = REQUEST_SCOPE
 TASK_FROM = "FROM ensayos_muestra a JOIN muestras s ON s.id=a.muestra_id JOIN solicitudes r ON r.id=s.solicitud_id\n    JOIN catalogo_ensayos c ON c.id=a.ensayo_id LEFT JOIN usuarios t ON t.id=a.tecnico_id"
-OPEN = "a.estado_revision='APPROVED' AND r.estado_solicitud='APPROVED' AND a.estado_ensayo NOT IN ('COMPLETED','CANCELLED')"
+OPEN = "a.estado_revision='APPROVED' AND r.estado_solicitud='APPROVED' AND r.estado_general='CREATED' AND a.estado_ensayo NOT IN ('COMPLETED','CANCELLED')"
 
 
 def paging(req):
@@ -116,13 +117,15 @@ def requests(db, req):
     )
     extra = []
     request_state_filter(req, extra, params)
+    lifecycle_filter(req, extra, params)
+    assay_filter(req, extra, params)
     request_filters(req, extra, params, dates=True, definition=True)
     if extra:
         where += " AND " + " AND ".join(extra)
     if req.params.get("view") == "reception":
         require_role(u, "ADMIN", "MANAGER", "TECH")
         where += (
-            " AND r.estado_solicitud IN ('WAITING_ASSAYS','SUBMITTED','OBSERVED','APPROVED') AND (r.codigo_ot IS NULL OR EXISTS(SELECT 1 FROM muestras s WHERE s.solicitud_id=r.id AND s.condicion<>'OK' AND "
+            " AND r.estado_general='CREATED' AND r.estado_solicitud IN ('WAITING_ASSAYS','SUBMITTED','OBSERVED','APPROVED') AND (r.codigo_ot IS NULL OR EXISTS(SELECT 1 FROM muestras s WHERE s.solicitud_id=r.id AND s.condicion<>'OK' AND "
             + SAMPLE_SCOPE
             + "))"
         )
@@ -147,10 +150,23 @@ def requests(db, req):
                 + SAMPLE_SCOPE
                 + ")"
             )
-    return page_result(
+    reception_select = ""
+    if req.params.get("view") == "reception":
+        reception_select = (
+            "(SELECT jsonb_build_object("
+            "'NOT_RECEIVED',count(*) FILTER (WHERE s.condicion='NOT_RECEIVED'),"
+            "'OBSERVED',count(*) FILTER (WHERE s.condicion='OBSERVED'),"
+            "'DAMAGED',count(*) FILTER (WHERE s.condicion='DAMAGED'),"
+            "'INSUFFICIENT',count(*) FILTER (WHERE s.condicion='INSUFFICIENT')) "
+            "FROM muestras s WHERE s.solicitud_id=r.id AND " + SAMPLE_SCOPE + ") reception_counts, "
+        )
+    result = page_result(
         db,
         req,
-        "SELECT ("
+        "SELECT "
+        + reception_select
+        + counts_sql()
+        + " assay_counts, ("
         + UNDEFINED
         + ") pending_assays, (SELECT count(*) FROM ensayos_muestra ax JOIN muestras s ON s.id=ax.muestra_id WHERE s.solicitud_id=r.id AND ax.estado_revision='PENDING' AND ax.estado_ensayo='PENDING' AND (:all_samples OR ax.tecnico_id=:u)) unapproved_count, r.*,r.proyecto_id project_code,r.proyecto_id project_name,author.nombre requester_name,org.nombre organization_name,\n        (SELECT count(*) FROM muestras s WHERE s.solicitud_id=r.id AND s.condicion<>'OK' AND (:all_samples OR EXISTS(SELECT 1 FROM ensayos_muestra ax WHERE ax.muestra_id=s.id AND ax.tecnico_id=:u))) pending_samples,\n        (SELECT count(*) FROM ensayos_muestra a JOIN muestras s ON s.id=a.muestra_id WHERE s.solicitud_id=r.id AND a.estado_revision<>'REJECTED' AND a.estado_ensayo<>'CANCELLED' AND (:all_samples OR a.tecnico_id=:u)) task_count,\n        (SELECT count(*) FROM ensayos_muestra a JOIN muestras s ON s.id=a.muestra_id WHERE s.solicitud_id=r.id AND a.estado_ensayo='COMPLETED' AND (:all_samples OR a.tecnico_id=:u)) completed_count",
         "FROM solicitudes r JOIN usuarios author ON author.id=r.creado_por JOIN empresas org ON org.id=r.empresa_id",
@@ -158,6 +174,9 @@ def requests(db, req):
         params,
         "r.creado_en DESC,r.id",
     )
+    for item in result["items"]:
+        item["assay_counts"] = normalize_counts(item["assay_counts"])
+    return result
 
 
 @bp.route(route="requests/{rid}", methods=["GET", "PUT"])
@@ -227,7 +246,12 @@ def work(db, req):
                 ),
             )
         return {"ok": True}
-    where = [SCOPE, "r.estado_solicitud IN ('APPROVED','CLOSED')", "(:all_samples OR a.tecnico_id=:u)"]
+    where = [
+        SCOPE,
+        "r.estado_solicitud<>'DRAFT'",
+        "(:all_samples OR a.tecnico_id=:u)",
+        "(a.row_kind='assay' OR r.estado_general='CREATED')",
+    ]
     params = scope_params(u)
     for key, column in (
         ("project", "r.proyecto_id"),
@@ -244,6 +268,8 @@ def work(db, req):
                 params[key] = value
     request_filters(req, where, params)
     state_filter(req, "state", "a.estado_ensayo", TASK_STATES, where, params)
+    lifecycle_filter(req, where, params)
+    assay_filter(req, where, params, work=True)
     metric = req.params.get("metric", "")
     if req.params.get("request_q"):
         where.append("(r.codigo ILIKE :request_q OR r.titulo ILIKE :request_q)")
@@ -258,20 +284,38 @@ def work(db, req):
         where.append("a.fin_previsto IS NULL")
     if metric == "upcoming":
         where.append("a.fin_previsto >= (now() AT TIME ZONE 'America/Lima')::date")
+    work_source = (
+        "FROM (SELECT ax.id,ax.muestra_id,ax.ensayo_id,ax.tecnico_id,ax.estado_revision,ax.estado_ensayo,"
+        "ax.inicio_previsto,ax.fin_previsto,ax.iniciado_en,ax.completado_en,ax.observaciones,"
+        "'assay'::text row_kind FROM ensayos_muestra ax UNION ALL "
+        "SELECT NULL::uuid id,sx.id muestra_id,NULL::uuid ensayo_id,NULL::uuid tecnico_id,"
+        "NULL::text estado_revision,NULL::text estado_ensayo,NULL::date inicio_previsto,NULL::date fin_previsto,"
+        "NULL::timestamptz iniciado_en,NULL::timestamptz completado_en,''::text observaciones,"
+        "'sample_without_assays'::text row_kind FROM muestras sx WHERE NOT EXISTS"
+        "(SELECT 1 FROM ensayos_muestra ax WHERE ax.muestra_id=sx.id)) a "
+        "JOIN muestras s ON s.id=a.muestra_id JOIN solicitudes r ON r.id=s.solicitud_id "
+        "LEFT JOIN catalogo_ensayos c ON c.id=a.ensayo_id LEFT JOIN usuarios t ON t.id=a.tecnico_id"
+    )
     result = page_result(
         db,
         req,
-        "SELECT a.*,s.codigo_cliente sample_code,s.condicion,c.nombre assay_name,t.nombre technician_name,\n        r.id solicitud_id,r.codigo request_code,author.nombre requester_name,org.nombre organization_name,r.version request_version,r.estado_solicitud request_status,r.codigo_ot,r.proyecto_id project_code",
-        TASK_FROM
+        "SELECT a.*,s.id sample_id,CASE WHEN a.row_kind='sample_without_assays' THEN 'WAITING_ASSAYS' ELSE "
+        + assay_case()
+        + " END assay_status,s.codigo_cliente sample_code,s.condicion,c.nombre assay_name,t.nombre technician_name,\n        r.id solicitud_id,r.codigo request_code,author.nombre requester_name,org.nombre organization_name,r.version request_version,r.estado_solicitud workflow_status,r.estado_general request_status,r.codigo_ot,r.proyecto_id project_code",
+        work_source
         + " JOIN usuarios author ON author.id=r.creado_por JOIN empresas org ON org.id=r.empresa_id",
         " AND ".join(where),
         params,
         "a.fin_previsto NULLS LAST,r.codigo,s.codigo_cliente,c.nombre,a.id",
     )
-    w.review_projection(db, result["items"])
+    w.review_projection(db, [t for t in result["items"] if t["row_kind"] == "assay"])
     for task in result["items"]:
         task["assigned"] = task["technician_id"] is not None
-        task["allowed_actions"] = w.allowed_actions(u, task, task["request_status"], task["codigo_ot"])
+        task["allowed_actions"] = (
+            w.allowed_actions(u, task, task["workflow_status"], task["codigo_ot"])
+            if task["row_kind"] == "assay" and task["request_status"] == "CREATED"
+            else []
+        )
     return result
 
 
@@ -297,7 +341,7 @@ def dashboard(db, req):
     ):
         totals[key] = one(
             db,
-            "SELECT count(*) n FROM muestras s JOIN solicitudes r ON r.id=s.solicitud_id WHERE r.estado_solicitud IN ('WAITING_ASSAYS','SUBMITTED','OBSERVED','APPROVED') AND "
+            "SELECT count(*) n FROM muestras s JOIN solicitudes r ON r.id=s.solicitud_id WHERE r.estado_general='CREATED' AND r.estado_solicitud IN ('WAITING_ASSAYS','SUBMITTED','OBSERVED','APPROVED') AND "
             + predicate
             + " AND "
             + SAMPLE_SCOPE
@@ -387,11 +431,15 @@ def filter_options(db, req):
         raise AppError(400, "Filtro no válido.")
     where = SCOPE
     if view == "reception":
-        where += " AND r.estado_solicitud IN ('WAITING_ASSAYS','SUBMITTED','OBSERVED','APPROVED')"
+        where += " AND r.estado_general='CREATED' AND r.estado_solicitud IN ('WAITING_ASSAYS','SUBMITTED','OBSERVED','APPROVED')"
         if technical_only(u):
             where += " AND r.estado_solicitud='APPROVED'"
     elif view == "work":
-        where += " AND r.estado_solicitud IN ('APPROVED','CLOSED') AND EXISTS(SELECT 1 FROM muestras s JOIN ensayos_muestra a ON a.muestra_id=s.id WHERE s.solicitud_id=r.id AND (:all_samples OR a.tecnico_id=:u))"
+        where += (
+            " AND r.estado_solicitud<>'DRAFT' AND EXISTS(SELECT 1 FROM muestras s WHERE s.solicitud_id=r.id AND "
+            + SAMPLE_SCOPE
+            + ")"
+        )
     elif view == "reports":
         where += " AND EXISTS(SELECT 1 FROM informes d WHERE d.solicitud_id=r.id)"
     table, fk = ("usuarios", "creado_por") if kind == "requester" else ("empresas", "empresa_id")

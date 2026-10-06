@@ -649,6 +649,14 @@
   },
   {
     "table_name": "solicitudes",
+    "column_name": "estado_general",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": "'CREATED'::text",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "solicitudes",
     "column_name": "observaciones",
     "data_type": "text",
     "is_nullable": "NO",

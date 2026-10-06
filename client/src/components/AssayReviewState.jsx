@@ -3,7 +3,12 @@ import useErrorNotice from "../hooks/useErrorNotice";
 import { api, messageOf } from "../services/api";
 import { Badge, Button, ErrorBox } from "./ui";
 
-export default function AssayReviewState({ task, request, onDone }) {
+export default function AssayReviewState({
+  task,
+  request,
+  onDone,
+  showBadge = true,
+}) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useErrorNotice();
   async function resubmit() {
@@ -22,18 +27,18 @@ export default function AssayReviewState({ task, request, onDone }) {
       setBusy(false);
     }
   }
-  if (task.approved) return null;
+  if (task.approved || task.state === "CANCELLED") return null;
   return (
     <div className="assay-review-state">
       {task.review_status === "REJECTED" ? (
         <>
-          <Badge state="REJECTED">Ensayo rechazado</Badge>
+          {showBadge && <Badge state="REJECTED">Ensayo rechazado</Badge>}
           {task.review_reason && (
             <small className="block">Motivo: {task.review_reason}</small>
           )}
         </>
       ) : (
-        <small className="approval-note">Por aprobar</small>
+        showBadge && <small className="approval-note">Por aprobar</small>
       )}
       {task.can_resubmit && (
         <Button type="button" busy={busy} onClick={resubmit}>

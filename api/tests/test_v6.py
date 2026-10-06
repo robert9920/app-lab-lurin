@@ -289,7 +289,12 @@ def test_rejected_resolved_does_not_block_closure(db, users):
             ],
         ),
     )
-    execute(db, "UPDATE ensayos_muestra SET estado_ensayo='CANCELLED' WHERE id=:id", id=r["tasks"][0]["id"])
+    execute(
+        db,
+        "UPDATE ensayos_muestra SET estado_ensayo='COMPLETED',tecnico_id=:u,iniciado_en=now(),completado_en=now() WHERE id=:id",
+        u=users["tecnico"]["id"],
+        id=r["tasks"][0]["id"],
+    )
     execute(
         db,
         "INSERT INTO informes(solicitud_id,version,nombre,clave_archivo,sha256,tamano_bytes,subido_por) VALUES(:r,1,'Ficticio.pdf',:key,'demo',100,:u)",

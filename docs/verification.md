@@ -1,4 +1,47 @@
-# Verificación · esquema 6
+# Verificación · esquema 7
+
+Ejecutada el **5 de octubre de 2026**. Solo se crearon y utilizaron las bases ficticias `lab_lc_v7_unit_test` y `lab_lc_v7_migration_test`; no se modificaron `lab_lc_v3`, `lab_lc`, AppControlHH, configuraciones privadas ni recursos Azure.
+
+## Ajustes de Recepción e Informes — sin migración
+
+Comprobados el **5 de octubre de 2026**, conservando el esquema 7 y las reglas operativas existentes.
+
+| Comprobación | Resultado real |
+|---|---|
+| Backend / pytest | **68 pruebas aprobadas** en `lab_lc_v7_unit_test`, con rollback por prueba; cuatro nuevas cubren los conteos de recepción y la búsqueda de informes. La suite existente de carga, descarga, privacidad y permisos también pasa. |
+| Recepción / PostgreSQL | Condiciones combinadas, conteos de una muestra una sola vez aunque tenga dos ensayos, dos técnicos con alcances distintos, filtros NOT_RECEIVED/issues/NO_OT, recepción conforme sin OT y exclusión de solicitudes canceladas/cerradas. `reception_counts` se devuelve solo con view=reception. |
+| Informes / PostgreSQL | Búsqueda parcial por código o título sin distinguir mayúsculas; coincidencia solo en proyecto excluida. Proyecto independiente AND, versiones conservadas y acceso denegado a cliente ajeno o técnico sin asignación. |
+| Frontend | **10 pruebas Vitest aprobadas**, ESLint sin errores ni advertencias y build Vite correcto (**1834 módulos**). |
+| Python / contratos | Ruff y formato correctos en los archivos modificados. OpenAPI regenerado y comprobado: conteos de recepción y búsqueda de informes documentados; README y AGENTS actualizados. |
+| Chrome / Playwright | Respuestas HTTP exclusivamente ficticias: indicadores combinados y Sin OT independiente, eliminación de status de enlaces antiguos sin restringir la primera consulta, reinicio de página, conservación de otros filtros, recarga/regreso y limpieza. Informes sin carga para ADMIN/MANAGER/TECH/CLIENT, búsqueda y proyecto separados, cero registros y carga conservada desde Documentos para MANAGER. Sin errores de React. |
+| Revisión visual | Capturas de Recepción e Informes a **1560 y 390 px**, con registros y vacío, en `.local/review-reception-reports/`; inspección de indicadores compactos, paneles y tablas. |
+
+Las primeras ejecuciones restringidas no pudieron iniciar esbuild ni gestionar temporales de pytest; se repitieron con permisos técnicos y finalizaron correctamente. La comprobación de navegador necesitó ajustar una espera de navegación, sin cambios adicionales de aplicación. No hay bloqueo local pendiente.
+
+**Publicación pendiente:** volver a publicar `api` y `client` coordinadamente y comprobar recepción, búsqueda y descarga con los servicios Azure desplegados. Esta actualización **no requiere SQL, variables ni servicios nuevos**; no repetir SQL05 sobre una base ya en esquema 7. Las pruebas locales no verifican los recursos Azure. No se cambiaron dependencias ni las exclusiones de publicación.
+
+## Resultados de estados y cancelación — esquema 7
+
+| Comprobación | Resultado real |
+|---|---|
+| Backend / pytest | **64 pruebas aprobadas** sobre PostgreSQL ficticio, con rollback por prueba. Incluyen las pruebas anteriores adaptadas al cierre con un completado y siete casos nuevos v7. |
+| Frontend / Vitest | **10 pruebas aprobadas**, cuatro archivos. Clasificación exclusiva, prioridad de cancelación/rechazo, singular/plural y distinción de muestras/ensayos. |
+| Ruff / formato / ESLint | Sin errores; formato Python correcto. |
+| Vite producción | Build correcto, **1834 módulos**; dist generado con el proxy conservado fuera de dist. |
+| Conteos y filtros SQL | Las ocho categorías se concilian con listados/ficha/Work, decisiones mixtas y transición operativa. **125 solicitudes** ficticias verificadas: 100 filas en primera página, 25 en segunda y total completo, sin ampliación del técnico por filtros manipulados. |
+| Permisos | Borradores exclusivos incluso cancelados; autor/jefatura pueden cancelar, ADMIN sin MANAGER y TECH no. Roles CLIENT+TECH mantienen resumen propio sin ampliar operaciones. Solicitud cancelada no admite comentarios ni acciones; desaparece de recepción/carga y del selector de destino de nuevos informes. |
+| Cancelación y cierre | Motivo, versión y control de acceso; preservación de responsables, fechas, completados, rechazados e informes. Impresión de etiquetas sigue disponible después de cancelar. Cierre sin completados se rechaza incluso con informe y ensayos cancelados; cierre válido fija CLOSED y no permite cancelar. |
+| SQL 05 | Cadena **3→4→5→6→7** en una base inicialmente vacía. También ejecución independiente de 6→7, bloqueo de repetición, conservación de cierre histórico sin completados y cancelación auditada de abiertos de rechazos globales antiguos. |
+| Coherencia de esquema | Instalación limpia y migración coinciden en nombres, tipos, nulabilidad y defaults; **11 tablas, 96 campos**. Única nueva columna física: solicitudes.estado_general. No contadores persistidos ni ensayos ficticios. |
+| Contratos/documentación | OpenAPI, diccionario README, AGENTS, Mermaid y SVG v7. Nuevos filtros assay_status/request_status, row_kind informativo y conteos documentados; parámetros antiguos conservados. |
+| Chrome / Playwright | Respuestas HTTP **sintéticas**, sin datos reales: conteos en listado/ficha, ocho opciones iguales en ambas vistas, selección múltiple, recarga/regreso/URL y limpieza. Botones centrados en cuatro vistas a **1560 y 390 px**. Filas sin ensayos no seleccionables; rechazo sin doble estado. Sin errores de React. Capturas locales revisadas, incluido SVG. |
+| Exclusiones | .gitignore y .funcignore conservan exclusiones de secretos, cachés, entornos, PDF y pruebas. El módulo services/statuses.py sí se incluye al publicar API. No fue necesario cambiar las exclusiones. |
+
+La primera ejecución restringida encontró errores de permisos al iniciar esbuild y gestionar temporales pytest. Las comprobaciones finales se ejecutaron con autorización técnica y terminaron correctamente; no queda un bloqueo de validación local.
+
+**Pendiente en Azure:** respaldar, aplicar solo 6→7 cuando la base esté en versión6, publicar API/client coordinadamente y repetir pruebas de aceptación con identidad Blob, proxy y PostgreSQL desplegados. El navegador sintético no sustituye una prueba integrada contra los servicios Azure ni se ha realizado un despliegue en esta entrega. La compilación no prueba esa infraestructura. Véase deployment.md.
+
+## Historial de comprobaciones — esquema 6
 
 Ejecutada el **2 de octubre de 2026**, con PostgreSQL y servidores locales aislados. Se conservaron `lab_lc_v3`, `lab_lc`, AppControlHH y la configuración privada original. No se publicaron cambios ni se modificaron recursos Azure.
 

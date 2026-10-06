@@ -15,21 +15,15 @@ import {
   Empty,
   fmtDate,
 } from "../components/ui";
-import ReportUpload from "../components/ReportUpload";
 import { Pager } from "./Dashboard";
 import { detailUrl } from "../services/navigation";
 export default function ReportsPage() {
   const { user } = useAuth(),
-    staff = user.roles.some((r) => ["MANAGER", "TECH"].includes(r)),
     [params, setParams] = useSearchParams(),
     location = useLocation();
   const [data, setData] = useState(null),
     [projects, setProjects] = useState([]),
-    [requests, setRequests] = useState([]),
-    [request, setRequest] = useState(null),
-    [search, setSearch] = useState(""),
-    [error, setError] = useErrorNotice(),
-    [revision, setRevision] = useState(0);
+    [error, setError] = useErrorNotice();
   const readers = user.roles.some((r) =>
     ["ADMIN", "MANAGER", "TECH"].includes(r),
   );
@@ -62,37 +56,12 @@ export default function ReportsPage() {
     return () => {
       live = false;
     };
-  }, [query, revision, setError]);
-  useEffect(() => {
-    if (staff) {
-      let live = true;
-      api
-        .get(
-          "/requests?status=APPROVED&limit=30&q=" + encodeURIComponent(search),
-        )
-        .then((r) => {
-          if (live) setRequests(r.data.items);
-        })
-        .catch((e) => setError(messageOf(e)));
-      return () => {
-        live = false;
-      };
-    }
-  }, [staff, search, revision, setError]);
+  }, [query, setError]);
   function filter(k, v) {
     const p = new URLSearchParams(params);
     v ? p.set(k, v) : p.delete(k);
     p.delete("page");
     setParams(p, { replace: true });
-  }
-  async function select(id) {
-    setRequest(null);
-    if (id)
-      try {
-        setRequest((await api.get("/requests/" + id)).data);
-      } catch (e) {
-        setError(messageOf(e));
-      }
   }
   return (
     <>
@@ -105,47 +74,7 @@ export default function ReportsPage() {
       <div className="listing-layout reports-listing">
         <aside className="card form-card filters-panel">
           <details open>
-            <summary>Filtros e informes</summary>
-            {staff && (
-              <section className="card form-card">
-                <h2>Subir un informe</h2>
-                <div className="form-grid">
-                  <Field label="Buscar solicitud aprobada">
-                    <input
-                      value={search}
-                      onChange={(e) => {
-                        setSearch(e.target.value);
-                        setRequest(null);
-                      }}
-                      placeholder="Código o nombre (hasta 30 coincidencias)"
-                    />
-                  </Field>
-                  <Field label="Solicitud de destino">
-                    <select
-                      value={request?.id || ""}
-                      onChange={(e) => select(e.target.value)}
-                    >
-                      <option value="">Seleccionar solicitud</option>
-                      {requests.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.code} · {r.title}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                </div>
-                {request && (
-                  <ReportUpload
-                    key={request.id + "-" + request.version}
-                    request={request}
-                    onDone={async () => {
-                      await select(request.id);
-                      setRevision((v) => v + 1);
-                    }}
-                  />
-                )}
-              </section>
-            )}
+            <summary>Filtros</summary>
             <div>
               <div className="filter-actions">
                 <ClearFilters
@@ -154,8 +83,9 @@ export default function ReportsPage() {
                 />
               </div>
               <div className="form-grid" key={filterEpoch}>
-                <Field label="Buscar informe por solicitud o proyecto">
+                <Field label="Buscar solicitud">
                   <input
+                    placeholder="Código o nombre de solicitud"
                     value={params.get("q") || ""}
                     onChange={(e) => filter("q", e.target.value)}
                   />

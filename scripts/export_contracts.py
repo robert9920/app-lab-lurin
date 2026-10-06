@@ -1,4 +1,4 @@
-"""Exporta contratos, diccionario y ERD desde la esquema 6 instalado (solo lectura)."""
+"""Exporta contratos, diccionario y ERD desde la esquema 7 instalado (solo lectura)."""
 
 import json
 import os
@@ -161,7 +161,7 @@ PURPOSE.update(
         "empresas": "Empresas de los solicitantes; como máximo una es interna.",
         "usuarios": "Identidad, contacto, empresa y roles de acceso; no existen asignaciones a proyectos.",
         "solicitudes": "Solicitud del autor; empresa conservada y código externo de proyecto sin FK entre bases.",
-        "migraciones_esquema": "Versiones instaladas, independientes del nombre de la base. El esquema actual es 6.",
+        "migraciones_esquema": "Versiones instaladas, independientes del nombre de la base. El esquema actual es 7.",
     }
 )
 MEANINGS.update(
@@ -187,12 +187,17 @@ OVERRIDES[("solicitudes", "empresa_id")] = (
     "Empresa conservada al crear la solicitud, independiente de cambios posteriores en el usuario. FK empresas.id."
 )
 OVERRIDES[("migraciones_esquema", "version")] = (
-    "Versión instalada, PK. Instalación limpia: 6; las migraciones conservan también las versiones previas."
+    "Versión instalada, PK. Instalación limpia: 7; las migraciones conservan también las versiones previas."
 )
 
 
+MEANINGS["estado_general"] = "Estado general: CREATED (Creado), CANCELLED (Cancelado) o CLOSED (Cerrado). Independiente de la etapa interna y los conteos derivados."
+OVERRIDES[("solicitudes", "estado_solicitud")] = "Etapa interna de envío/revisión que conserva privacidad de borradores y permisos. No es el filtro visible Estado Solicitud."
+
 def inspect_schema():
     with engine().connect() as db:
+        if rows(db, "SELECT max(version) version FROM migraciones_esquema")[0]["version"] != 7:
+            raise RuntimeError("El exportador requiere esquema 7 instalado; usa una base ficticia o aplica la actualización explícita antes de exportar.")
         columns = rows(
             db,
             """SELECT table_name,column_name,data_type,is_nullable,column_default,is_identity
@@ -214,7 +219,7 @@ def inspect_schema():
         )
     if {c["table_name"] for c in columns} != set(PURPOSE):
         raise RuntimeError(
-            "El exportador requiere exclusivamente las 11 tablas del esquema v6"
+            "El exportador requiere exclusivamente las 11 tablas del esquema v7"
         )
     return columns, foreign, primary
 
@@ -222,7 +227,7 @@ def inspect_schema():
 def export_erd(columns, foreign, primary):
     lines = [
         "---",
-        "title: Laboratorio Lara Consulting · PostgreSQL v6",
+        "title: Laboratorio Lara Consulting · PostgreSQL v7",
         "config:",
         "  theme: neutral",
         "---",
@@ -314,6 +319,8 @@ def export_erd(columns, foreign, primary):
 
 
 def export_openapi():
+    from services.statuses import ASSAY_STATUSES
+
     models = {
         "auth/login": v.Login,
         "requests": v.RequestCreate,
@@ -338,7 +345,7 @@ def export_openapi():
         "openapi": "3.1.0",
         "info": {
             "title": "Laboratorio Lara Consulting",
-            "version": "6.0.0",
+            "version": "7.0.0",
             "description": "Sesión opaca en cookie lab_session. Escrituras requieren Origin exacto y X-CSRF-Token de GET /session. "
             "ADMIN administra; MANAGER dirige; TECH solo consulta sus solicitudes, muestras y ensayos asignados; CLIENT accede solo a sus propias solicitudes. Borradores exclusivos de su autor. "
             "En Azure, la clave de Functions se agrega exclusivamente en el proxy. version identifica la revisión de la solicitud. "
@@ -359,6 +366,8 @@ def export_openapi():
         "requests": [
             "q",
             "status",
+            "request_status",
+            "assay_status",
             "project",
             "view",
             "condition",
@@ -380,6 +389,8 @@ def export_openapi():
             "technician",
             "assay",
             "state",
+            "request_status",
+            "assay_status",
             "metric",
             "page",
             "limit",
@@ -416,7 +427,12 @@ def export_openapi():
             "WorkTask": {
                 "type": "object",
                 "properties": {
-                    "id": {"type": "string", "format": "uuid"},
+                    "id": {"type": ["string", "null"], "format": "uuid"},
+                    "row_kind": {"enum": ["assay", "sample_without_assays"]},
+                    "sample_id": {"type": "string", "format": "uuid"},
+                    "assay_status": {"enum": list(ASSAY_STATUSES)},
+                    "request_status": {"enum": ["CREATED", "CANCELLED", "CLOSED"]},
+                    "workflow_status": {"type": "string", "description": "Etapa interna de envío/revisión."},
                     "state": {
                         "enum": [
                             "PENDING",
@@ -424,6 +440,7 @@ def export_openapi():
                             "OBSERVED",
                             "COMPLETED",
                             "CANCELLED",
+                            None,
                         ]
                     },
                     "technician_id": {"type": ["string", "null"]},
@@ -432,12 +449,12 @@ def export_openapi():
                         "description": "OT manual por solicitud; requisito de assign/start/resume, junto con aprobación y material cuando corresponda.",
                     },
                     "approved": {
-                        "type": "boolean",
+                        "type": ["boolean", "null"],
                         "description": "Calculado desde review_status=APPROVED; no es una columna física.",
                     },
                     "review_status": {
-                        "type": "string",
-                        "enum": ["PENDING", "APPROVED", "REJECTED"],
+                        "type": ["string", "null"],
+                        "enum": ["PENDING", "APPROVED", "REJECTED", None],
                     },
                     "review_reason": {
                         "type": "string",
@@ -504,6 +521,7 @@ def export_openapi():
                         "type": "boolean",
                         "description": "Permiso operativo sobre la muestra; recibir requiere además solicitud enviada; TECH requiere aprobación y asignación.",
                     },
+                    "can_print": {"type": "boolean", "description": "Permiso para imprimir muestras autorizadas, también en solicitudes canceladas o cerradas. No habilita escrituras."},
                 },
             },
         }
@@ -622,7 +640,7 @@ def export_openapi():
                 )
             if route == "requests/{rid}/actions":
                 op["description"] = (
-                    "La acción legacy approve sin selección devuelve 409: usar /assays/review. Resto de acciones conserva sus reglas."
+                    "Las acciones legacy approve y reject devuelven 409. Usar /assays/review o cancel con motivo. Cancelación por autor CLIENT o MANAGER: versión, transacción, conserva completados/rechazados e informes. close exige MANAGER, al menos un completado, muestras definidas, trabajo resuelto e informe. Canceladas/cerradas sin escrituras."
                 )
             if route == "auth/login":
                 op["security"] = []
@@ -654,6 +672,10 @@ def export_openapi():
                         op["parameters"][-1]["description"] = (
                             "Uno o varios códigos separados por comas; OR. En requests, SUBMITTED busca revisión pendiente en solicitudes enviadas/abiertas, incluidas APPROVED. WAITING_ASSAYS busca muestras sin ensayos en solicitudes enviadas/abiertas, incluidas APPROVED/OBSERVED. Otros códigos filtran el estado principal. En work, state filtra la ejecución."
                         )
+                    if name == "assay_status":
+                        op["parameters"][-1]["description"] = "CSV OR: " + ", ".join(ASSAY_STATUSES) + ". Clasificación exclusiva: CANCELLED > revisión REJECTED > revisión PENDING > ejecución aprobada. WAITING_ASSAYS cuenta muestras sin ensayos de solicitudes CREATED; work devuelve filas informativas sin id ni acciones. Otros filtros AND."
+                    if name == "request_status":
+                        op["parameters"][-1]["description"] = "CSV OR: CREATED, CANCELLED, CLOSED; independiente de etapas internas. Otros filtros AND."
                     if name in ("requester", "organization", "selected"):
                         op["parameters"][-1]["description"] = (
                             "UUID; filtra únicamente dentro del alcance autorizado. selected obtiene la etiqueta de una opción al recargar."
@@ -678,11 +700,16 @@ def export_openapi():
                         op["parameters"][-1]["description"] = (
                             "En view=reception, NOT_RECEIVED exige al menos una muestra sin recibir; issues material observado/dañado/insuficiente; NO_OT carece de OT. Incluye solicitudes enviadas sin ensayos; TECH solo aprobadas asignadas."
                         )
+                    if route == "reports" and name == "q":
+                        op["parameters"][-1]["description"] = (
+                            "Coincidencia parcial sin distinguir mayúsculas en código o título de solicitud. "
+                            "No busca proyecto ni nombre de archivo; project es un filtro independiente combinado con AND."
+                        )
                     if name == "sample_ids":
                         op["parameters"][-1]["description"] = (
                             "Obligatorio para labels: 1 a 200 UUID separados por comas, sin duplicados, recibidos y autorizados. PDF A4 2x4, etiquetas 95x68 mm."
                         )
-                if route in ("requests", "reports", "filter-options"):
+                if route in ("requests", "work", "reports", "filter-options"):
                     properties = {
                         "id": {"type": "string", "format": "uuid"},
                         "requester_name": {
@@ -697,6 +724,17 @@ def export_openapi():
                     if route == "requests":
                         properties.update(
                             {
+                                "request_status": {"enum": ["CREATED", "CANCELLED", "CLOSED"]},
+                                "reception_counts": {
+                                    "type": "object",
+                                    "properties": {
+                                        k: {"type": "integer", "minimum": 0}
+                                        for k in ("NOT_RECEIVED", "OBSERVED", "DAMAGED", "INSUFFICIENT")
+                                    },
+                                    "description": "Solo con view=reception: muestras por condición, calculadas en PostgreSQL sobre el alcance autorizado; cada muestra cuenta una vez. TECH solo asignadas. Sin OT se deriva de codigo_ot=null, independientemente de estos conteos.",
+                                },
+                                "codigo_ot": {"type": ["string", "null"]},
+                                "assay_counts": {"type": "object", "properties": {k: {"type": "integer", "minimum": 0} for k in ASSAY_STATUSES}, "description": "Una categoría por ensayo. WAITING_ASSAYS cuenta muestras, solo en CREATED. Alcance autorizado, cálculo SQL completo."},
                                 "pending_assays": {
                                     "type": "boolean",
                                     "description": "Al menos una muestra accesible sin ensayos definidos.",
@@ -719,10 +757,7 @@ def export_openapi():
                                 "properties": {
                                     "items": {
                                         "type": "array",
-                                        "items": {
-                                            "type": "object",
-                                            "properties": properties,
-                                        },
+                                        "items": ({"$ref": "#/components/schemas/WorkTask"} if route == "work" else {"type": "object", "properties": properties}),
                                     },
                                     "total": {"type": "integer"},
                                     "page": {"type": "integer"},
@@ -794,6 +829,9 @@ def export_openapi():
                                         "description": "Opcional e independiente; formato este seis dígitos enteros y norte siete; ambos admiten decimales. Históricos sin cambios se conservan.",
                                     },
                                     "codigo_ot": {"type": ["string", "null"]},
+                                    "request_status": {"enum": ["CREATED", "CANCELLED", "CLOSED"]},
+                                    "can_cancel": {"type": "boolean"},
+                                    "assay_counts": {"type": "object", "properties": {k: {"type": "integer", "minimum": 0} for k in ASSAY_STATUSES}},
                                     "tasks": {
                                         "type": "array",
                                         "items": {

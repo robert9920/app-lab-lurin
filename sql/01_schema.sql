@@ -1,4 +1,4 @@
--- Versión 6: instalar exclusivamente en una base NUEVA y vacía.
+-- Versión 7: instalar exclusivamente en una base NUEVA y vacía.
 BEGIN;
 CREATE TABLE migraciones_esquema (version integer PRIMARY KEY, aplicado_en timestamptz NOT NULL DEFAULT now());
 CREATE TABLE empresas (
@@ -25,6 +25,7 @@ CREATE TABLE solicitudes (
  codigo_ot text CHECK(codigo_ot IS NULL OR (codigo_ot=upper(trim(codigo_ot)) AND length(codigo_ot) BETWEEN 1 AND 60)),
  titulo text NOT NULL, estado_solicitud text NOT NULL DEFAULT 'DRAFT'
  CHECK(estado_solicitud IN ('DRAFT','WAITING_ASSAYS','SUBMITTED','OBSERVED','APPROVED','REJECTED','CLOSED')),
+ estado_general text NOT NULL DEFAULT 'CREATED' CONSTRAINT solicitudes_estado_general_valido CHECK(estado_general IN ('CREATED','CANCELLED','CLOSED')),
  observaciones text NOT NULL DEFAULT '', fecha_objetivo date,
  version integer NOT NULL DEFAULT 1 CHECK(version>0),
  creado_en timestamptz NOT NULL DEFAULT now(), actualizado_en timestamptz NOT NULL DEFAULT now()
@@ -95,6 +96,6 @@ CREATE FUNCTION historial_inmutable() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN RAISE EXCEPTION 'El historial es inmutable'; END $$;
 CREATE TRIGGER actividad_inmutable BEFORE UPDATE OR DELETE ON actividad FOR EACH ROW EXECUTE FUNCTION historial_inmutable();
 CREATE TRIGGER informes_inmutables BEFORE UPDATE OR DELETE ON informes FOR EACH ROW EXECUTE FUNCTION historial_inmutable();
-INSERT INTO migraciones_esquema(version) VALUES(6);
+INSERT INTO migraciones_esquema(version) VALUES(7);
 COMMIT;
 

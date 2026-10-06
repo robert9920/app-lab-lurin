@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Laboratorio Lara Consulting",
-    "version": "6.0.0",
+    "version": "7.0.0",
     "description": "Sesión opaca en cookie lab_session. Escrituras requieren Origin exacto y X-CSRF-Token de GET /session. ADMIN administra; MANAGER dirige; TECH solo consulta sus solicitudes, muestras y ensayos asignados; CLIENT accede solo a sus propias solicitudes. Borradores exclusivos de su autor. En Azure, la clave de Functions se agrega exclusivamente en el proxy. version identifica la revisión de la solicitud. Los lotes de /work son transaccionales. Cada informe se hace visible al confirmar la carga."
   },
   "servers": [
@@ -865,6 +865,79 @@
                             "type": "string",
                             "description": "Empresa guardada en la solicitud; no depende de cambios posteriores del usuario."
                           },
+                          "request_status": {
+                            "enum": [
+                              "CREATED",
+                              "CANCELLED",
+                              "CLOSED"
+                            ]
+                          },
+                          "reception_counts": {
+                            "type": "object",
+                            "properties": {
+                              "NOT_RECEIVED": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "OBSERVED": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "DAMAGED": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "INSUFFICIENT": {
+                                "type": "integer",
+                                "minimum": 0
+                              }
+                            },
+                            "description": "Solo con view=reception: muestras por condición, calculadas en PostgreSQL sobre el alcance autorizado; cada muestra cuenta una vez. TECH solo asignadas. Sin OT se deriva de codigo_ot=null, independientemente de estos conteos."
+                          },
+                          "codigo_ot": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "assay_counts": {
+                            "type": "object",
+                            "properties": {
+                              "PENDING_REVIEW": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "PENDING_EXECUTION": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "RUNNING": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "WAITING_ASSAYS": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "REJECTED": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "COMPLETED": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "CANCELLED": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "OBSERVED": {
+                                "type": "integer",
+                                "minimum": 0
+                              }
+                            },
+                            "description": "Una categoría por ensayo. WAITING_ASSAYS cuenta muestras, solo en CREATED. Alcance autorizado, cálculo SQL completo."
+                          },
                           "pending_assays": {
                             "type": "boolean",
                             "description": "Al menos una muestra accesible sin ensayos definidos."
@@ -936,6 +1009,22 @@
               "type": "string"
             },
             "description": "Uno o varios códigos separados por comas; OR. En requests, SUBMITTED busca revisión pendiente en solicitudes enviadas/abiertas, incluidas APPROVED. WAITING_ASSAYS busca muestras sin ensayos en solicitudes enviadas/abiertas, incluidas APPROVED/OBSERVED. Otros códigos filtran el estado principal. En work, state filtra la ejecución."
+          },
+          {
+            "name": "request_status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "CSV OR: CREATED, CANCELLED, CLOSED; independiente de etapas internas. Otros filtros AND."
+          },
+          {
+            "name": "assay_status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "CSV OR: PENDING_REVIEW, PENDING_EXECUTION, RUNNING, WAITING_ASSAYS, REJECTED, COMPLETED, CANCELLED, OBSERVED. Clasificación exclusiva: CANCELLED > revisión REJECTED > revisión PENDING > ejecución aprobada. WAITING_ASSAYS cuenta muestras sin ensayos de solicitudes CREATED; work devuelve filas informativas sin id ni acciones. Otros filtros AND."
           },
           {
             "name": "project",
@@ -1184,6 +1273,53 @@
                         "null"
                       ]
                     },
+                    "request_status": {
+                      "enum": [
+                        "CREATED",
+                        "CANCELLED",
+                        "CLOSED"
+                      ]
+                    },
+                    "can_cancel": {
+                      "type": "boolean"
+                    },
+                    "assay_counts": {
+                      "type": "object",
+                      "properties": {
+                        "PENDING_REVIEW": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "PENDING_EXECUTION": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "RUNNING": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "WAITING_ASSAYS": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "REJECTED": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "COMPLETED": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "CANCELLED": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "OBSERVED": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      }
+                    },
                     "tasks": {
                       "type": "array",
                       "items": {
@@ -1403,7 +1539,7 @@
             }
           }
         },
-        "description": "La acción legacy approve sin selección devuelve 409: usar /assays/review. Resto de acciones conserva sus reglas."
+        "description": "Las acciones legacy approve y reject devuelven 409. Usar /assays/review o cancel con motivo. Cancelación por autor CLIENT o MANAGER: versión, transacción, conserva completados/rechazados e informes. close exige MANAGER, al menos un completado, muestras definidas, trabajo resuelto e informe. Canceladas/cerradas sin escrituras."
       }
     },
     "/requests/{rid}/receptions": {
@@ -1762,6 +1898,22 @@
               "type": "string"
             },
             "description": "Uno o varios códigos separados por comas; OR. En requests, SUBMITTED busca revisión pendiente en solicitudes enviadas/abiertas, incluidas APPROVED. WAITING_ASSAYS busca muestras sin ensayos en solicitudes enviadas/abiertas, incluidas APPROVED/OBSERVED. Otros códigos filtran el estado principal. En work, state filtra la ejecución."
+          },
+          {
+            "name": "request_status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "CSV OR: CREATED, CANCELLED, CLOSED; independiente de etapas internas. Otros filtros AND."
+          },
+          {
+            "name": "assay_status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "CSV OR: PENDING_REVIEW, PENDING_EXECUTION, RUNNING, WAITING_ASSAYS, REJECTED, COMPLETED, CANCELLED, OBSERVED. Clasificación exclusiva: CANCELLED > revisión REJECTED > revisión PENDING > ejecución aprobada. WAITING_ASSAYS cuenta muestras sin ensayos de solicitudes CREATED; work devuelve filas informativas sin id ni acciones. Otros filtros AND."
           },
           {
             "name": "metric",
@@ -2511,7 +2663,8 @@
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Coincidencia parcial sin distinguir mayúsculas en código o título de solicitud. No busca proyecto ni nombre de archivo; project es un filtro independiente combinado con AND."
           },
           {
             "name": "project",
@@ -2757,8 +2910,44 @@
         "type": "object",
         "properties": {
           "id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "row_kind": {
+            "enum": [
+              "assay",
+              "sample_without_assays"
+            ]
+          },
+          "sample_id": {
             "type": "string",
             "format": "uuid"
+          },
+          "assay_status": {
+            "enum": [
+              "PENDING_REVIEW",
+              "PENDING_EXECUTION",
+              "RUNNING",
+              "WAITING_ASSAYS",
+              "REJECTED",
+              "COMPLETED",
+              "CANCELLED",
+              "OBSERVED"
+            ]
+          },
+          "request_status": {
+            "enum": [
+              "CREATED",
+              "CANCELLED",
+              "CLOSED"
+            ]
+          },
+          "workflow_status": {
+            "type": "string",
+            "description": "Etapa interna de envío/revisión."
           },
           "state": {
             "enum": [
@@ -2766,7 +2955,8 @@
               "RUNNING",
               "OBSERVED",
               "COMPLETED",
-              "CANCELLED"
+              "CANCELLED",
+              null
             ]
           },
           "technician_id": {
@@ -2783,15 +2973,22 @@
             "description": "OT manual por solicitud; requisito de assign/start/resume, junto con aprobación y material cuando corresponda."
           },
           "approved": {
-            "type": "boolean",
+            "type": [
+              "boolean",
+              "null"
+            ],
             "description": "Calculado desde review_status=APPROVED; no es una columna física."
           },
           "review_status": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "enum": [
               "PENDING",
               "APPROVED",
-              "REJECTED"
+              "REJECTED",
+              null
             ]
           },
           "review_reason": {
@@ -2913,6 +3110,10 @@
           "can_receive": {
             "type": "boolean",
             "description": "Permiso operativo sobre la muestra; recibir requiere además solicitud enviada; TECH requiere aprobación y asignación."
+          },
+          "can_print": {
+            "type": "boolean",
+            "description": "Permiso para imprimir muestras autorizadas, también en solicitudes canceladas o cerradas. No habilita escrituras."
           }
         }
       },
@@ -3567,7 +3768,8 @@
               "approve",
               "observe",
               "reject",
-              "close"
+              "close",
+              "cancel"
             ],
             "title": "Action",
             "type": "string"

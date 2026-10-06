@@ -1,3 +1,4 @@
+import { assayStatus } from "../services/statuses";
 import useErrorNotice from "../hooks/useErrorNotice";
 import AssayReviewState from "./AssayReviewState";
 import { useEffect, useState } from "react";
@@ -76,7 +77,10 @@ export default function WorkPanel({ request, user, onDone, bulk = false }) {
       <ErrorBox>{error}</ErrorBox>
       <div className="card-title">
         <h2>Ensayos y programación</h2>
-        <span className="muted">{request.tasks.length + " ensayos"}</span>
+        <span className="muted">
+          {request.tasks.filter((t) => t.row_kind !== "sample_without_assays")
+            .length + " ensayos"}
+        </span>
       </div>
       {staff && selectable.length > 0 && !selected.length && (
         <p className="work-hint">
@@ -122,22 +126,24 @@ export default function WorkPanel({ request, user, onDone, bulk = false }) {
                 </thead>
                 <tbody>
                   {request.tasks.map((t) => (
-                    <tr key={t.id}>
+                    <tr key={t.id || "sample-" + t.sample_id}>
                       {staff && (
                         <td>
-                          <input
-                            aria-label={`Seleccionar ${t.sample_code} ${t.assay_name || t.name}`}
-                            disabled={!t.allowed_actions?.length}
-                            type="checkbox"
-                            checked={selected.includes(t.id)}
-                            onChange={(e) =>
-                              setSelected(
-                                e.target.checked
-                                  ? [...selected, t.id]
-                                  : selected.filter((id) => id !== t.id),
-                              )
-                            }
-                          />
+                          {t.row_kind !== "sample_without_assays" && (
+                            <input
+                              aria-label={`Seleccionar ${t.sample_code} ${t.assay_name || t.name}`}
+                              disabled={!t.allowed_actions?.length}
+                              type="checkbox"
+                              checked={selected.includes(t.id)}
+                              onChange={(e) =>
+                                setSelected(
+                                  e.target.checked
+                                    ? [...selected, t.id]
+                                    : selected.filter((id) => id !== t.id),
+                                )
+                              }
+                            />
+                          )}
                         </td>
                       )}
                       <td>
@@ -152,7 +158,9 @@ export default function WorkPanel({ request, user, onDone, bulk = false }) {
                           Material: <Badge state={t.condition} />
                         </small>
                         <small className="block">
-                          {t.assay_name || t.name}
+                          {t.row_kind === "sample_without_assays"
+                            ? "Ensayos por definir"
+                            : t.assay_name || t.name}
                         </small>
                       </td>
                       {bulk && (
@@ -162,12 +170,15 @@ export default function WorkPanel({ request, user, onDone, bulk = false }) {
                         </td>
                       )}
                       <td>
-                        <Badge state={t.state} />
-                        <AssayReviewState
-                          task={t}
-                          request={request}
-                          onDone={onDone}
-                        />
+                        <Badge state={t.assay_status || assayStatus(t)} />
+                        {t.row_kind !== "sample_without_assays" && (
+                          <AssayReviewState
+                            showBadge={false}
+                            task={t}
+                            request={request}
+                            onDone={onDone}
+                          />
+                        )}
                       </td>
                       <td>{t.technician_name || "Sin asignar"}</td>
                       <td>

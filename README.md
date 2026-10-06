@@ -1,10 +1,10 @@
-# Laboratorio Lara Consulting · esquema 6
+# Laboratorio Lara Consulting · esquema 7
 
 Aplicación de solicitudes, recepción, ensayos e informes. React JavaScript, Vite y Tailwind CSS en `client`; Python 3.12 y Azure Functions HTTP en `api`; PostgreSQL como persistencia real. Interfaz en español, fechas presentadas en America/Lima.
 
 ## Cambios y compatibilidad
 
-Producción conserva la base **lab_lc** y local **lab_lc_v3**. Los nombres JSON existentes se conservan mediante api/schema_names.py (por ejemplo weight → peso, easting/northing → coordenada_este/coordenada_norte). El número del esquema, ahora **6**, es independiente del nombre de la base. No se requiere crear otra base para actualizar. Hay once tablas; se retiraron `proyectos` y `miembros_proyecto`. El proyecto es un código de texto en `solicitudes.proyecto_id`, sin FK entre bases. `empresa_id` conserva la empresa de la solicitud aunque después se cambie la empresa del autor.
+Producción conserva la base **lab_lc** y local **lab_lc_v3**. Los nombres JSON existentes se conservan mediante api/schema_names.py (por ejemplo weight → peso, easting/northing → coordenada_este/coordenada_norte). El número del esquema, ahora **7**, es independiente del nombre de la base. No se requiere crear otra base para actualizar. Hay once tablas; se retiraron `proyectos` y `miembros_proyecto`. El proyecto es un código de texto en `solicitudes.proyecto_id`, sin FK entre bases. `empresa_id` conserva la empresa de la solicitud aunque después se cambie la empresa del autor.
 
 El acceso sigue usando contraseña Argon2id, sesiones opacas y CSRF. El administrador crea usuarios y restablece contraseñas; no se envían correos ni enlaces. Sin MFA, invitaciones ni FERNET_KEY. Fernet cifraba secretos de funciones retiradas y nunca intervino en el hash de contraseñas. No se puede recuperar una contraseña del hash.
 
@@ -12,10 +12,10 @@ El acceso sigue usando contraseña Argon2id, sesiones opacas y CSRF. El administ
 
 1. Respaldar PostgreSQL y PDF y poner la aplicación en mantenimiento; detener versiones anteriores durante la actualización.
 2. Verificar `SELECT current_database(); SELECT max(version) FROM migraciones_esquema;` en la base deseada: Azure **lab_lc**, local **lab_lc_v3**.
-3. **Si la versión es 5, ejecutar SOLO la nueva sección 5→6** de `sql/05_actualizacion_solicitudes.sql`, desde «NUEVA SECCIÓN — Actualización de esquema 5 a 6: revisión individual de ensayos» hasta su COMMIT. No ejecutar los bloques anteriores. En versión 4 ejecutar 4→5 y 5→6; en versión 3 ejecutar el archivo completo. En versión 6 no repetir. No ejecutar 01 ni datos ficticios sobre una base existente.
-4. Comprobar que la versión resultante es 6. `ensayos_muestra.estado_revision` reemplaza el booleano físico `aprobado`: true se convierte a APPROVED y false a PENDING. Conserva IDs, estados operativos, técnicos, fechas, resultados e informes. No añade tablas.
-5. Publicar `api` y `client` coordinadamente y reiniciar. **No hay nuevas variables ni servicios Azure respecto al esquema 5**; conservar la configuración que ya funciona. `python manage.py migrate` reconoce 3/4/5/6 y es una alternativa explícita al SQL, no un paso adicional automático al publicar.
-6. Probar una aprobación y un rechazo con motivo, reenvío del ensayo rechazado, filtros y PDF antes de reabrir. Para revertir, restaurar juntos respaldo de base y paquetes anteriores; no borrar archivos PDF.
+3. **Si la versión es 6, ejecutar SOLO la nueva sección 6→7** de `sql/05_actualizacion_solicitudes.sql`, desde «NUEVA SECCIÓN — Actualización de esquema 6 a 7: estados de solicitud y resumen de ensayos» hasta su COMMIT. No repetir secciones anteriores. En versión 5 ejecutar 5→6 y 6→7; en versión 4, 4→5, 5→6 y 6→7; en versión 3, el archivo completo. En versión 7 no repetir. No ejecutar 01 ni demo sobre una base existente.
+4. Comprobar versión7. `solicitudes.estado_general` añade CREATED/CANCELLED/CLOSED; los rechazos globales históricos se convierten en cancelaciones y sus ensayos abiertos no rechazados se cancelan con historial. Preserva decisiones, resultados completados, técnicos, fechas, informes y cierres históricos. No añade tablas.
+5. Publicar `api` y `client` coordinadamente y reiniciar. **No hay nuevas variables ni servicios Azure respecto al esquema 6**; conservar la configuración que ya funciona. `python manage.py migrate` reconoce 3/4/5/6/7 y es una alternativa explícita al SQL, no un paso adicional automático al publicar.
+6. Probar conteos y filtros en Solicitudes/Trabajo, revisión y ejecución parcial, cancelación con motivo, cierre con un completado y PDF antes de reabrir. Para revertir, restaurar juntos respaldo de base y paquetes anteriores; no borrar archivos PDF.
 
 Las cantidades existentes se conservan numéricamente como **sacos**; no se convierten a peso. Si hay cantidades fraccionarias o no finitas, 05 aborta antes de modificar el esquema: revisar con el laboratorio y corregir explícitamente antes de reintentar. Los nuevos pesos, geografía y OT quedan NULL en registros históricos; no se inventan valores. Al editar una solicitud histórica se deberán completar distrito, provincia y departamento. Las coordenadas este y norte permanecen opcionales, incluso al editar.
 
@@ -27,7 +27,7 @@ Requisitos: Anaconda/Miniconda, PostgreSQL en ejecución, Python 3.12, Node.js 2
 
 ### Base vacía
 
-En pgAdmin conectado a `postgres`, ejecutar `sql/00_create_database_local.sql` fuera de transacción. Cambiar a `lab_lc_v3` y ejecutar en orden `01_schema.sql`, `02_catalog.sql` y, solo para demostración, `03_demo.sql`. 01 instala directamente esquema 6. **No ejecutar 05 después de 01**, pues 05 actualiza instalaciones anteriores 3/4/5. `04_runtime_permissions.sql` concede permisos a una cuenta PostgreSQL limitada opcional, distinta de los roles de usuarios del portal; quien utilice una cuenta existente debe revisar sus permisos. En Azure, el SQL 00 oficial crea `lab_lc`.
+En pgAdmin conectado a `postgres`, ejecutar `sql/00_create_database_local.sql` fuera de transacción. Cambiar a `lab_lc_v3` y ejecutar en orden `01_schema.sql`, `02_catalog.sql` y, solo para demostración, `03_demo.sql`. 01 instala directamente esquema 7. **No ejecutar 05 después de 01**, pues 05 actualiza instalaciones anteriores 3/4/5/6. `04_runtime_permissions.sql` concede permisos a una cuenta PostgreSQL limitada opcional, distinta de los roles de usuarios del portal; quien utilice una cuenta existente debe revisar sus permisos. En Azure, el SQL 00 oficial crea `lab_lc`.
 
 ### Ventana 1: backend
 
@@ -110,18 +110,18 @@ No ejecutar estos GRANT sin sustituir la cuenta real. También puede utilizarse 
 
 - **Datos generales:** proyecto solo para la empresa interna; nombre, distrito, provincia y departamento obligatorios. Fecha objetivo, indicaciones y coordenadas este/norte opcionales. No se asume zona UTM ni sistema geodésico a partir de estos números.
 - **Matriz de muestras:** una fila por muestra, hasta 200. Calicata/sondaje y profundidades opcionales; Muestra y Tipo de muestra obligatorios. Sacos: entero positivo o desconocido; Peso: kg positivo o desconocido. Observaciones opcionales. Ensayos en columnas, casillas individuales o aplicadas a filas seleccionadas; duplicación y pegado tabulado de ocho columnas descriptivas desde Excel. No se importan automáticamente los Excel originales.
-- **Envío:** se admiten muestras sin ensayos. Si alguna carece de ellos, el estado es WAITING_ASSAYS / Pendiente de ensayos. Cuando todas tengan ensayos, pasa a SUBMITTED / En revisión. Ambos estados ya son visibles para jefatura y permiten recepción.
+- **Envío:** se admiten muestras sin ensayos. La etapa interna es WAITING_ASSAYS si alguna muestra carece de ensayos o SUBMITTED cuando todas los tienen. Estas etapas controlan envío, privacidad y recepción; no son el Estado Solicitud visible. Los conteos muestran por separado revisiones pendientes y muestras sin ensayos.
 - **Edición antes de aprobar:** el autor CLIENT puede editar antes de aprobación, también después de enviar. Desde el envío, el proyecto no cambia. Una muestra recibida conserva su identidad y datos declarados: no se elimina ni se modifica; se pueden incorporar ensayos después. Cambios concurrentes devuelven conflicto para recargar antes de reintentar.
 - **Recepción:** jefatura recibe solicitudes enviadas, incluso pendientes de ensayos. TECH recibe solo muestras asignadas de solicitudes aprobadas. Sacos y peso recibidos son datos independientes de los declarados; fecha/hora y transporte se aplican al grupo seleccionado. Recepciones parciales y correcciones mantienen historial y motivo.
 - **OT:** botón Generar OT en Recepción, exclusivo jefatura; código manual normalizado. Requiere al menos una muestra recibida, aunque esté observada/dañada/insuficiente y falten otras. No habilita por sí sola material no conforme. Cambiar una OT exige motivo. Un único texto por solicitud; no se crea tabla de órdenes.
 - **Revisión individual:** «Revisar ensayos» permite aprobar o rechazar cada ensayo pendiente, guardar decisiones distintas juntas o revisar uno solo. Rechazar exige motivo; los no seleccionados continúan pendientes. La primera aprobación lleva la solicitud a APPROVED. Si todos se rechazan, sin ninguno aprobado ni pendiente, queda OBSERVED. Los nuevos y los rechazados no pueden asignarse ni ejecutarse; el trabajo aprobado continúa. Revisión y ejecución son campos distintos; asignación sigue derivándose de tecnico_id.
 - **Estados:** pendiente ámbar, ejecución azul, observado rojo, completado verde, cancelado gris. Responsable/jefatura pueden observar/completar solamente después de iniciar. Solo jefatura cancela o retoma con motivo; retomar conserva la fecha inicial. La selección masiva muestra solo acciones válidas para todos y es atómica.
-- **Informes:** PDF privado, máximo 20 MiB/500 páginas, sin cifrado ni contenido activo. Técnicos/jefatura cargan en solicitudes aprobadas; disponibilidad inmediata para usuarios autorizados. Cada carga conserva un archivo y versión. Las comprobaciones técnicas no son un escáner antimalware. Cierre separado de jefatura: todas las muestras con ensayos definidos, ensayos aceptados resueltos, sin decisiones pendientes e informe disponible. Los rechazos resueltos no bloquean por sí solos el cierre.
+- **Informes:** PDF privado, máximo 20 MiB/500 páginas, sin cifrado ni contenido activo. Técnicos/jefatura cargan en solicitudes aprobadas; disponibilidad inmediata para usuarios autorizados. Cada carga conserva un archivo y versión. Las comprobaciones técnicas no son un escáner antimalware. Cierre separado de jefatura: al menos un ensayo aprobado completado, todas las muestras con ensayos definidos, ensayos aceptados resueltos, sin decisiones pendientes e informe disponible. Los rechazos resueltos no bloquean por sí solos el cierre.
 - **Actas y etiquetas:** bajo demanda, sin almacenamiento histórico adicional. Etiquetas A4, 95×68 mm, 2×4, separación 4 mm; tamaño real/100 %, ocho por página. Código recepción compartible y código laboratorio único; ambos manuales obligatorios al recibir. Se conservan cliente, código proyecto, muestra, punto y profundidad; sin UR; la esquina inferior izquierda muestra OT: codigo_ot o OT: — si aún no existe.
 
 ### Solicitar y revisar ensayos
 
-El autor usa «Solicitar ensayos» después de aprobar, hasta el cierre. `PUT /requests/{rid}/assays` recibe `version` y `samples: [{sample_id, assay_ids}]` para cambiar selecciones pendientes sobre las muestras existentes. No modifica la cabecera, las muestras ni ensayos ya revisados (aprobados o rechazados).
+El autor usa «Solicitar ensayos» después de aprobar, mientras la solicitud no esté cancelada ni cerrada. `PUT /requests/{rid}/assays` recibe `version` y `samples: [{sample_id, assay_ids}]` para cambiar selecciones pendientes sobre las muestras existentes. No modifica la cabecera, las muestras ni ensayos ya revisados (aprobados o rechazados).
 
 Solo MANAGER puede usar `POST /requests/{rid}/assays/review` con `version` y `decisions: [{task_id, decision, reason}]`. `decision` admite APPROVED o REJECTED; cada rechazo requiere motivo. Se validan pertenencia, duplicados, revisión pendiente, permisos y versión antes de guardar el conjunto en una única transacción. La antigua acción global `approve` devuelve 409 e indica que se debe seleccionar cada ensayo. ADMIN necesita el rol adicional MANAGER para revisar.
 
@@ -131,7 +131,15 @@ JSON mantiene `approved` calculado desde `review_status=APPROVED`, e incorpora `
 
 ### Filtros, coordenadas y carga
 
-Solicitudes/Recepción/Trabajo/Informes muestran solicitante y empresa a ADMIN/MANAGER/TECH, usando la empresa conservada en la solicitud. Los parámetros `requester` y `organization` son UUID; las opciones paginadas de `/filter-options?kind=requester|organization&view=requests|reception|work|reports&q=...` respetan el mismo alcance. Los estados admiten comas (`status=APPROVED,SUBMITTED`, `state=PENDING,RUNNING`): OR entre estados, AND con otros filtros. En Solicitudes y Recepción, En revisión (`SUBMITTED`) incluye enviadas abiertas con ensayos pendientes de decisión, también las APPROVED con ensayos nuevos. Pendiente de ensayos (`WAITING_ASSAYS`) incluye enviadas abiertas con alguna muestra sin ensayos, incluso APPROVED u OBSERVED. Ambos excluyen DRAFT, CLOSED y REJECTED; los demás estados siguen filtrando el estado principal. Se retiró el selector separado «Ensayos por definir». El parámetro antiguo `pending_assays=true|false` se mantiene para enlaces existentes y se combina mediante AND. `created_from` y `created_to` incluyen los días completos en America/Lima; filtran creación de solicitud. URL conserva filtros y paginación. «Borrar filtros» limpia todos los parámetros, incluido pending_assays, vuelve a página 1 y reinicia las búsquedas de selectores, conservando la sección. Solicitudes muestra Fecha de creación en Lima y conserva Fecha objetivo. El cliente externo sin roles operativos no ve Proyecto.
+Solicitudes/Recepción/Trabajo/Informes muestran solicitante y empresa a ADMIN/MANAGER/TECH, usando la empresa conservada en la solicitud. Los parámetros `requester` y `organization` son UUID; las opciones paginadas de `/filter-options?kind=requester|organization&view=requests|reception|work|reports&q=...` respetan el mismo alcance. Los filtros **Estado Ensayo** de Solicitudes y Trabajo de laboratorio comparten `assay_status` CSV: `PENDING_REVIEW` (Por aprobar), `PENDING_EXECUTION` (Pendiente Ejecución), `RUNNING` (En Ejecución), `WAITING_ASSAYS` (Pendiente Ensayos), `REJECTED`, `COMPLETED`, `CANCELLED` y `OBSERVED`. OR dentro de cada selección y AND entre filtros. La tabla Solicitudes muestra cada cantidad distinta de cero; WAITING_ASSAYS cuenta **muestras** sin ensayos solo en solicitudes CREATED, no ensayos ficticios. Una fila real cuenta una sola vez: ejecución CANCELLED tiene prioridad, luego revisión REJECTED, revisión PENDING y ejecución aprobada. No mostrar Pendiente y Rechazado simultáneamente. En Work las muestras sin ensayos son filas informativas `row_kind=sample_without_assays`, `id=null`, sin selección ni acciones; la paginación cuenta todas las filas, pero el encabezado distingue ensayos reales. Incluye trabajo enviado pendiente de revisión, aprobado e histórico; excluye borradores. TECH sigue limitado a sus asignaciones y no accede a esas muestras sin ensayos.
+
+**Estado Solicitud** usa `request_status=CREATED,CANCELLED,CLOSED` y corresponde a `solicitudes.estado_general`: Creado, Cancelado o Cerrado. El estado no cambia al revisar o ejecutar ensayos. JSON `status` conserva la etapa interna `estado_solicitud`; `assay_counts` se calcula en SQL sobre todas las filas autorizadas, sin guardar contadores. La ficha reutiliza el resumen del listado. La API conserva `status`, `state` y `pending_assays` para consultas antiguas; Recepción conserva sus filtros operativos, excluyendo solicitudes canceladas. Los enlaces internos de carga usan el nuevo `assay_status`.
+
+`created_from` y `created_to` incluyen los días completos en America/Lima; filtran creación de solicitud. URL conserva filtros y paginación. «Borrar filtros», centrado en los cuatro paneles, limpia todos los parámetros, incluido pending_assays, vuelve a página 1 y reinicia las búsquedas de selectores, conservando la sección. Solicitudes muestra Fecha de creación en Lima y conserva Fecha objetivo. El cliente externo sin roles operativos no ve Proyecto.
+
+**Recepción** muestra «Estado Recepción»: cantidades de muestras sin recibir, observadas, dañadas e insuficientes, más «Sin OT» cuando falta `codigo_ot`. Pueden coexistir varios indicadores; no representan aprobación ni ejecución de ensayos. `/requests?view=reception` devuelve `reception_counts` con `NOT_RECEIVED`, `OBSERVED`, `DAMAGED` e `INSUFFICIENT`, calculados en PostgreSQL y limitados a las muestras accesibles (TECH: asignadas). El único selector de estado en esta página es «Estado de recepción»: `condition=NOT_RECEIVED`, `issues` o `NO_OT`; los demás filtros se conservan. La interfaz retira `status` de enlaces antiguos de Recepción y reinicia su página, conservando las demás selecciones. Las reglas de recepción/OT y las exclusiones de solicitudes terminales no cambian.
+
+**Informes** (`/reports`) sirve para consultar, visualizar y descargar versiones ya cargadas. La carga de PDF permanece en **Documentos**, dentro de la solicitud, con los permisos actuales. «Buscar solicitud» usa `q` para coincidencias parciales en código o título de solicitud sin distinguir mayúsculas; no busca proyecto ni nombre de archivo. Proyecto conserva su filtro independiente (`project`), combinado con los demás mediante AND. Estos ajustes no requieren SQL ni nuevas variables o servicios Azure; publicar API y frontend coordinadamente. El esquema continúa en versión 7.
 
 Coordenadas opcionales e independientes: este `100000 ≤ valor < 1000000`, norte `1000000 ≤ valor < 10000000`, números finitos con decimales permitidos. Es validación de formato, no de posición, zona ni datum. No se reescriben coordenadas históricas; se valida una coordenada histórica al modificarla. Profundidad cero sigue siendo válida y es independiente de esta regla.
 
@@ -142,6 +150,16 @@ Coordenadas opcionales e independientes: este `100000 ≤ valor < 1000000`, nort
 La cabecera muestra el nombre completo registrado y la empresa debajo, sin etiquetas de rol añadidas ni truncamiento; en móvil permite varias líneas. Inicio de sesión y sesión incluyen `organization_name`. Los nombres existentes no se editan automáticamente: un texto como «cliente interno» que forme parte del nombre registrado seguirá apareciendo hasta que el administrador lo cambie.
 
 `NumericInput` se usa en sacos/peso de declaración y recepción. Sacos: mínimo 1, entero e incremento 1. Peso: positivo e incremento 0.1 kg. Las flechas son botones propios para no imponer un step de 0.1 a los decimales escritos: por ejemplo, 0.025 permanece 0.025 y la flecha suma 0.1 sin redondearlo a una décima. Profundidades conservan sus controles anteriores. No se redondean datos existentes.
+
+### Cancelar y cerrar solicitudes
+
+El autor CLIENT o MANAGER puede enviar `POST /requests/{rid}/actions` con `{version, action: "cancel", reason}`. El motivo es obligatorio. Se bloquea la solicitud y se cancela en una transacción todo ensayo abierto no rechazado; se conservan completados, rechazos, responsables, fechas, informes e historial. ADMIN sin MANAGER y TECH no pueden cancelar solicitudes. DRAFT permanece exclusivo de su autor, incluso cancelado. No hay reapertura.
+
+Cancelar impide edición, recepción, revisión, reenvío, OT, carga de nuevos PDF, comentarios y ejecución; no impide consulta autorizada ni descargas o impresión. La solicitud sale de recepción y carga operativa. La antigua acción global reject devuelve409 para indicar Cancelar solicitud o revisión individual; el rechazo de un ensayo no cancela la solicitud.
+
+Cerrar corresponde solo a MANAGER: al menos un ensayo aprobado COMPLETED, ninguna muestra sin ensayos, ninguna revisión/trabajo aceptado pendiente e informe disponible. Rechazos resueltos y ensayos cancelados no bloquean por sí solos el cierre, pero todos cancelados sin completados no permiten cerrar. Una solicitud cerrada no se puede cancelar. Los cierres históricos se conservan.
+
+SQL 6→7 añade únicamente `estado_general` (text, NOT NULL, default CREATED, CHECK de tres valores). CLOSED interno se convierte en CLOSED general y REJECTED global anterior en CANCELLED; sus ensayos abiertos no rechazados se cancelan con auditoría de migración. No se modifican fechas, decisiones, archivos ni resultados completados. Los demás quedan CREATED. No se añaden tablas, servicios ni variables Azure.
 
 ## Permisos y privacidad
 
@@ -181,9 +199,9 @@ npm test
 npm run build
 ```
 
-Las pruebas PostgreSQL requieren TEST_DATABASE_URL apuntando exclusivamente a una base ficticia admitida, por ejemplo lab_lc_v6_unit_test. E2E usa LAB_E2E_URL y LAB_E2E_PASSWORD privados y cuentas ficticias. No usar bases reales. Resultados y limitaciones: [docs/verification.md](docs/verification.md). Contrato: [docs/openapi.json](docs/openapi.json). ERD: [Mermaid](docs/database.mmd) y [SVG](docs/database.svg). Publicación y actualización de Azure: [docs/deployment.md](docs/deployment.md).
+Las pruebas PostgreSQL requieren TEST_DATABASE_URL apuntando exclusivamente a una base ficticia admitida con esquema 7, por ejemplo lab_lc_v7_unit_test. E2E usa LAB_E2E_URL y LAB_E2E_PASSWORD privados y cuentas ficticias. No usar bases reales. Resultados y limitaciones: [docs/verification.md](docs/verification.md). Contrato: [docs/openapi.json](docs/openapi.json). ERD: [Mermaid](docs/database.mmd) y [SVG](docs/database.svg). Publicación y actualización de Azure: [docs/deployment.md](docs/deployment.md).
 
-Git, VS Code App Service y Functions tienen exclusiones independientes. No publicar .env, local.settings.json, .local, PDF locales, cachés, entornos ni node_modules Windows; sí lockfiles y certificados públicos. El frontend publicado requiere dist más server.mjs y sus dependencias; npm run build no crea un ZIP ni agrega el proxy. Se mantienen las configuraciones de despliegue existentes. Esta actualización 5→6 solo necesita el nuevo bloque SQL y ambos paquetes; no cambia conexiones, permisos de infraestructura ni variables Azure.
+Git, VS Code App Service y Functions tienen exclusiones independientes. No publicar .env, local.settings.json, .local, PDF locales, cachés, entornos ni node_modules Windows; sí lockfiles y certificados públicos. El frontend publicado requiere dist más server.mjs y sus dependencias; npm run build no crea un ZIP ni agrega el proxy. Se mantienen las configuraciones de despliegue existentes. Esta actualización 6→7 solo necesita el nuevo bloque SQL y ambos paquetes; no cambia conexiones, permisos de infraestructura ni variables Azure.
 
 Los controles de aplicación no son una garantía absoluta de seguridad de Azure. Mantener HTTPS, verify-full, Blob privado, copias y restauración coordinada con los informes; probar la nueva entrega en los recursos reales antes de habilitar usuarios.
 
@@ -256,7 +274,8 @@ Escala central: --text-brand = 11px; --text-tiny = 12px; --text-small = 13px; --
 | `.notice` | General | `--text-control` | 14px | [740](client/src/styles.css#L740) |
 | `.filter-bar > select` | General | `--text-control` | 14px | [763](client/src/styles.css#L763) |
 | `.pagination` | General | `--text-small` | 13px | [771](client/src/styles.css#L771) |
-| `.field > span, .field-label` | General | `--text-small` | 13px | [786](client/src/styles.css#L786) |
+| `.field > span,
+ .field-label` | General | `--text-small` | 13px | [786](client/src/styles.css#L786) |
 | `.back-link` | General | `--text-small` | 13px | [818](client/src/styles.css#L818) |
 | `.steps button` | General | `--text-control` | 14px | [832](client/src/styles.css#L832) |
 | `.sample-editor header` | General | `--text-control` | 14px | [863](client/src/styles.css#L863) |
@@ -271,7 +290,8 @@ Escala central: --text-brand = 11px; --text-tiny = 12px; --text-small = 13px; --
 | `.check-label` | General | `--text-control` | 14px | [997](client/src/styles.css#L997) |
 | `.document-hero p` | General | `--text-control` | 14px | [1008](client/src/styles.css#L1008) |
 | `.document-row` | General | `--text-small` | 13px | [1024](client/src/styles.css#L1024) |
-| `.list-row, .issue` | General | `--text-control` | 14px | [1047](client/src/styles.css#L1047) |
+| `.list-row,
+ .issue` | General | `--text-control` | 14px | [1047](client/src/styles.css#L1047) |
 | `.list-row p` | General | `--text-small` | 13px | [1052](client/src/styles.css#L1052) |
 | `.timeline-item` | General | `--text-control` | 14px | [1069](client/src/styles.css#L1069) |
 | `.activation h1` | General | `--text-title-small` | 27px | [1142](client/src/styles.css#L1142) |
@@ -374,7 +394,8 @@ Solicitud del autor; empresa conservada y código externo de proyecto sin FK ent
 | `coordenada_norte` | `numeric` | No | `NULL` | — | Coordenada norte opcional. NULL si se desconoce; no se convierte ni se presume sistema de referencia. |
 | `codigo_ot` | `text` | No | `NULL` | — | OT manual normalizada en mayúsculas. Jefatura requiere al menos una muestra recibida para registrarla; correcciones con motivo. |
 | `titulo` | `text` | Sí | `Sin valor; debe suministrarse` | — | Nombre o propósito del servicio solicitado. |
-| `estado_solicitud` | `text` | Sí | `'DRAFT'::text` | — | DRAFT, WAITING_ASSAYS, SUBMITTED, OBSERVED, APPROVED, REJECTED o CLOSED. |
+| `estado_solicitud` | `text` | Sí | `'DRAFT'::text` | — | Etapa interna de envío/revisión que conserva privacidad de borradores y permisos. No es el filtro visible Estado Solicitud. |
+| `estado_general` | `text` | Sí | `'CREATED'::text` | — | Estado general: CREATED (Creado), CANCELLED (Cancelado) o CLOSED (Cerrado). Independiente de la etapa interna y los conteos derivados. |
 | `observaciones` | `text` | Sí | `''::text` | — | Observaciones del registro. |
 | `fecha_objetivo` | `date` | No | `NULL` | — | Fecha objetivo solicitada; no sustituye el fin previsto de cada ensayo. |
 | `version` | `integer` | Sí | `1` | — | Contador de concurrencia del agregado: aumenta con cambios de muestras, ensayos, comentarios, informes o estado. |
@@ -480,11 +501,11 @@ Contador compartido entre instancias para los intentos de acceso.
 
 ### migraciones_esquema
 
-Versiones instaladas, independientes del nombre de la base. El esquema actual es 6.
+Versiones instaladas, independientes del nombre de la base. El esquema actual es 7.
 
 | Campo | Tipo | Obligatorio (NOT NULL) | Valor predeterminado SQL | Relación / clave | Función |
 |---|---|---|---|---|---|
-| `version` | `integer` | Sí | `Sin valor; debe suministrarse` | PK | Versión instalada, PK. Instalación limpia: 6; las migraciones conservan también las versiones previas. |
+| `version` | `integer` | Sí | `Sin valor; debe suministrarse` | PK | Versión instalada, PK. Instalación limpia: 7; las migraciones conservan también las versiones previas. |
 | `aplicado_en` | `timestamptz` | Sí | `now()` | — | Instante de instalación de la versión del esquema. |
 
 <!-- END FIELD DICTIONARY -->

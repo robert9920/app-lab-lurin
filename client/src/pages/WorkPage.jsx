@@ -1,3 +1,4 @@
+import { assayStatuses } from "../services/statuses";
 import useErrorNotice from "../hooks/useErrorNotice";
 import SearchSelect from "../components/SearchSelect";
 import RequesterFilters from "../components/RequesterFilters";
@@ -11,7 +12,6 @@ import {
   Field,
   ErrorBox,
   Loading,
-  labels,
 } from "../components/ui";
 import WorkPanel from "../components/WorkPanel";
 import { Pager } from "./Dashboard";
@@ -103,17 +103,7 @@ export default function WorkPage() {
                   ],
                 ],
                 ["assay", "Tipo de ensayo", options.catalog],
-                [
-                  "state",
-                  "Estado",
-                  [
-                    "PENDING",
-                    "RUNNING",
-                    "OBSERVED",
-                    "COMPLETED",
-                    "CANCELLED",
-                  ].map((id) => ({ id, name: labels[id] })),
-                ],
+                ["assay_status", "Estado Ensayo", assayStatuses],
                 [
                   "metric",
                   "Carga",
@@ -134,7 +124,7 @@ export default function WorkPage() {
                 .map(([key, label, items]) => (
                   <Field key={key} label={label}>
                     <SearchSelect
-                      multiple={key === "state"}
+                      multiple={key === "assay_status"}
                       value={params.get(key) || ""}
                       onChange={(v) => filter(key, v)}
                       options={items}

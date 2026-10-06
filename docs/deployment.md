@@ -1,20 +1,19 @@
 # Publicación en Azure desde VS Code
 
-## Actualización de una aplicación ya instalada en esquema 5 → 6
+## Actualización de una aplicación ya instalada en esquema 6 → 7
 
-No se necesitan servicios ni variables Azure nuevas. Conservar App Service, Functions, PostgreSQL, Blob, identidades, claves, orígenes y comando de inicio que ya funcionan.
+No crear recursos ni cambiar variables Azure. Conservar origen, proxy, HTTPS, credenciales, identidad Blob, conexiones y comandos de inicio existentes. Producción continúa en **lab_lc** y local en **lab_lc_v3**.
 
-1. Respaldar PostgreSQL/PDF y restringir temporalmente el acceso; detener el backend anterior durante el cambio.
-2. En pgAdmin, comprobar `SELECT current_database(); SELECT max(version) FROM migraciones_esquema;`. Producción **lab_lc**, local **lab_lc_v3**.
-3. Con versión5 ejecutar **SOLO «NUEVA SECCIÓN — Actualización de esquema 5 a 6: revisión individual de ensayos»** de `sql/05_actualizacion_solicitudes.sql`, desde su BEGIN hasta COMMIT final. No ejecutar los bloques 3→4 ni 4→5. En versión4 ejecutar 4→5 y 5→6; en versión3 ejecutar los tres, en ese orden. En versión6 no repetir. No ejecutar 01 sobre bases existentes.
-4. Confirmar versión6. La nueva sección convierte aprobado=true a estado_revision=APPROVED y false a PENDING, elimina solo la columna reemplazada y conserva estados operativos, técnicos, fechas y archivos. No agrega tablas.
-5. Publicar por VS Code **api** y **client** con sus exclusiones habituales. dist sola no incluye el proxy. Reiniciar ambos servicios sin cambiar ajustes privados.
-6. Comprobar login/nombre/empresa, avisos, limpieza de filtros y Fecha de creación. Revisar dos ensayos: aprobar uno y rechazar el otro con motivo. Como autor, reenviar el rechazado y comprobar que vuelve a aparecer al filtrar En revisión, sin detener el aprobado. Revisarlo de nuevo; comprobar permisos, versiones y PDF antes de reabrir.
-7. Reversión: restaurar conjuntamente el respaldo de base y paquetes anteriores; no borrar Blob. Estas pruebas locales no certifican el funcionamiento de los recursos Azure desplegados.
+1. Respaldar PostgreSQL y los PDF/versiones referenciados. Conservar paquetes anteriores y ajustes privados. Detener el backend anterior y restringir temporalmente el acceso al portal durante SQL y publicación coordinada.
+2. En pgAdmin conectado a la base correcta, comprobar `SELECT current_database(); SELECT max(version) FROM migraciones_esquema;`.
+3. **Si la versión es 6, ejecutar SOLO la sección «NUEVA SECCIÓN — Actualización de esquema 6 a 7: estados de solicitud y resumen de ensayos»** de `sql/05_actualizacion_solicitudes.sql`, desde su BEGIN hasta su COMMIT. No ejecutar los bloques anteriores ni 01. Si es 5: ejecutar 5→6 y 6→7; si es 4: 4→5, 5→6 y 6→7; si es 3: todo SQL05. Si es 7: no repetir.
+4. Confirmar versión7 y `SELECT estado_general,count(*) FROM solicitudes GROUP BY estado_general;`. La nueva columna admite CREATED/CANCELLED/CLOSED. Preserva etapa interna y cierres históricos; convierte rechazos globales anteriores en cancelaciones y cancela sus ensayos abiertos no rechazados con auditoría. Conserva completados, decisiones, fechas, PDFs y claves Blob.
+5. Publicar **api** y **client** mediante VS Code con las exclusiones actuales. Compilar client según la ruta ya configurada; dist sola no incluye el proxy. Reiniciar ambos servicios. No mezclar backend v7 con un frontend anterior durante la transición.
+6. Como autor, enviar dos muestras con un ensayo en una y ninguno en otra. Ver conteos Por aprobar y muestra pendiente; aprobar uno, iniciar y comprobar Pendiente Ejecución/En Ejecución. Revisar rechazo y reenvío. Comprobar mismos filtros en Work, filas informativas, privacidad, borradores, técnicos y descarga autorizada.
+7. Probar cancelación con motivo como autor/jefatura: consultas e informes permanecen, escrituras bloqueadas, carga y recepción excluidas. Verificar que no se pueda cancelar cerrado ni cerrar sin al menos un completado o con trabajo/revisión/muestras pendientes o sin PDF.
+8. Reversión: restaurar conjuntamente respaldo de base y paquetes anteriores. No eliminar Blob ni intentar quitar columnas en una base operativa para volver atrás. Las pruebas locales no certifican Azure desplegado.
 
-Para una instalación nueva: 00 (lab_lc en Azure / lab_lc_v3 en local), 01 (esquema6), 02 catálogo, 04 permisos opcionales, administrador inicial. No ejecutar 05 tras 01. 03 es exclusivamente demostración. Los permisos opcionales PostgreSQL son distintos de los roles del portal; para revisar, la cuenta del portal debe tener MANAGER.
-
-La sección0 conserva los antecedentes 3→4; las siguientes describen infraestructura e instalación desde cero. Si esos cambios ya se aplicaron, no repetirlos ni crear otra base. El número de esquema es independiente del nombre de base. En local conservar local.settings.json privado y las dos ventanas Anaconda; aplicar el mismo bloque SQL sobre lab_lc_v3 y reiniciar.
+Para instalación **nueva y vacía**: SQL00 crea lab_lc en Azure o lab_lc_v3 local; SQL01 instala esquema7, SQL02 catálogo, SQL04 permisos runtime opcionales y administrador inicial. No ejecutar05 tras01; SQL03 solo demostración. El número de esquema es independiente del nombre. En local aplicar el mismo bloque6→7 conservando local.settings.json y las dos ventanas Anaconda.
 
 ## 0. Antecedente: actualización de esquema 3 a 4
 
@@ -22,7 +21,7 @@ No recrear App Service, Functions, Blob ni la base lab_lc. Conservar los ajustes
 
 1. Respaldar lab_lc y los PDF/versiones referenciados. Conservar los paquetes anteriores y una copia privada de ajustes. Probar restauración en base separada; no ejecutar 01_schema.sql sobre lab_lc existente.
 2. Pausar el acceso al portal y detener Functions para evitar peticiones de la versión anterior durante el cambio. Con el propietario, conectado expresamente a **lab_lc**, comprobar `SELECT current_database(); SELECT max(version) FROM migraciones_esquema;`. La versión requerida es 3.
-3. El **primer bloque** de `sql/05_actualizacion_solicitudes.sql`, antes de «NUEVA SECCIÓN», convierte UUID de proyecto en código conservando empresa/autor, retira proyectos y miembros_proyecto, añade geografía, pesos, teléfono, empresa interna, OT y WAITING_ASSAYS. Conserva informes y sus claves Blob; no mueve PDFs. Rechaza cantidades fraccionarias/no finitas sin convertirlas. Este bloque termina en versión 4 y once tablas. Desde versión3, el archivo completo aplica tres transacciones sucesivas y termina en versión6. Desde versión4 ejecutar 4→5 y 5→6; desde versión5 ejecutar solo 5→6. No ejecutar 01 ni demo sobre una base existente.
+3. El **primer bloque** de `sql/05_actualizacion_solicitudes.sql`, antes de «NUEVA SECCIÓN», convierte UUID de proyecto en código conservando empresa/autor, retira proyectos y miembros_proyecto, añade geografía, pesos, teléfono, empresa interna, OT y WAITING_ASSAYS. Conserva informes y sus claves Blob; no mueve PDFs. Rechaza cantidades fraccionarias/no finitas sin convertirlas. Este bloque termina en versión 4 y once tablas. Desde versión3, el archivo completo aplica cuatro transacciones sucesivas y termina en versión7. Desde versión4 ejecutar 4→5, 5→6 y 6→7; desde versión5, 5→6 y 6→7; desde versión6, solo6→7. No ejecutar 01 ni demo sobre una base existente.
 4. En el mismo servidor PostgreSQL verificar que **AppControlHH.public.proyecto** exista con `id_proyecto` y `nombre`, y que la cuenta elegida pueda leerlos. La conexión es independiente de lab_lc: pertenecer al mismo servidor no concede automáticamente permisos sobre otra base. Puede usarse una cuenta ya autorizada; se recomienda una cuenta de lectura, sin obligar a cambiar tu cuenta actual de laboratorio. Véase el ejemplo GRANT del README, ejecutado en AppControlHH por su propietario.
 5. En **Functions → Variables de entorno**, añadir **PROJECTS_DATABASE_URL**. Ejemplo sin credenciales reales:
 
