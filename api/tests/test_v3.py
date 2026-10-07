@@ -43,7 +43,6 @@ def test_draft_author_only_lists_detail_and_creation(db, users):
         province="Lima",
         department="Lima",
         project_id="DEMO-001",
-        title="Privacidad",
         samples=[
             {
                 "material": "Suelo",
@@ -294,7 +293,6 @@ def test_technician_with_client_role_can_draft_without_operational_access(db, us
             province="Lima",
             department="Lima",
             project_id=project,
-            title="Pedido propio del técnico",
             samples=[
                 {
                     "material": "Suelo",

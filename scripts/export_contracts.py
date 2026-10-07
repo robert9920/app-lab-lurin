@@ -1,4 +1,4 @@
-"""Exporta contratos, diccionario y ERD desde la esquema 7 instalado (solo lectura)."""
+"""Exporta contratos, diccionario y ERD desde el esquema 9 instalado (solo lectura)."""
 
 import json
 import os
@@ -10,13 +10,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 local = ROOT / "api/local.settings.json"
 if local.exists():
-    for key, value in json.loads(local.read_text(encoding="utf-8-sig"))[
-        "Values"
-    ].items():
+    for key, value in json.loads(local.read_text(encoding="utf-8-sig"))["Values"].items():
         os.environ.setdefault(key, value)
-import validation as v
-from database import engine, rows
-from function_app import app
+# La configuración y la ruta de la API deben cargarse antes de sus módulos.
+import validation as v  # noqa: E402
+from database import engine, rows  # noqa: E402
+from function_app import app  # noqa: E402
+from schema_names import FIELD_NAMES, TABLE_NAMES  # noqa: E402
 
 PURPOSE = {
     "organizations": "Empresas propietarias de los proyectos.",
@@ -129,12 +129,8 @@ OVERRIDES = {
 }
 
 
-from schema_names import FIELD_NAMES, TABLE_NAMES
-
 PURPOSE = {
-    TABLE_NAMES.get(k, k): value.replace("activity", "actividad").replace(
-        "versión 2", "versión 3"
-    )
+    TABLE_NAMES.get(k, k): value.replace("activity", "actividad").replace("versión 2", "versión 3")
     for k, value in PURPOSE.items()
 }
 MEANINGS = {FIELD_NAMES.get(k, k): value for k, value in MEANINGS.items()}
@@ -146,9 +142,9 @@ MEANINGS.update(
     }
 )
 OVERRIDES = {
-    (TABLE_NAMES.get(t, t), FIELD_NAMES.get(c, c)): value.replace(
-        "inserta 2", "inserta 3"
-    ).replace("request_number", "numero_solicitud")
+    (TABLE_NAMES.get(t, t), FIELD_NAMES.get(c, c)): value.replace("inserta 2", "inserta 3").replace(
+        "request_number", "numero_solicitud"
+    )
     for (t, c), value in OVERRIDES.items()
 }
 
@@ -161,7 +157,8 @@ PURPOSE.update(
         "empresas": "Empresas de los solicitantes; como máximo una es interna.",
         "usuarios": "Identidad, contacto, empresa y roles de acceso; no existen asignaciones a proyectos.",
         "solicitudes": "Solicitud del autor; empresa conservada y código externo de proyecto sin FK entre bases.",
-        "migraciones_esquema": "Versiones instaladas, independientes del nombre de la base. El esquema actual es 7.",
+        "migraciones_esquema": "Versiones instaladas, independientes del nombre de la base. El esquema actual es 9.",
+        "catalogo_ensayos": "Catálogo editable; precio vigente en USD para estimaciones económicas, sin registrar pagos.",
     }
 )
 MEANINGS.update(
@@ -175,10 +172,15 @@ MEANINGS.update(
         "coordenada_este": "Coordenada este opcional. NULL si se desconoce; no se convierte ni se presume sistema de referencia.",
         "coordenada_norte": "Coordenada norte opcional. NULL si se desconoce; no se convierte ni se presume sistema de referencia.",
         "codigo_ot": "OT manual normalizada en mayúsculas. Jefatura requiere al menos una muestra recibida para registrarla; correcciones con motivo.",
-        "cantidad": "Cantidad declarada de sacos enteros positivos; NULL significa desconocida.",
-        "cantidad_recibida": "Cantidad actual de sacos recibidos, enteros positivos y opcionales; no se acumula al corregir.",
-        "peso": "Peso declarado en kg, positivo y opcional; separado de los sacos.",
-        "peso_recibido": "Peso real recibido en kg, positivo y opcional; permite comparar con el declarado.",
+        "cantidad": "Cantidad declarada de recipientes enteros positivos; NULL significa desconocida.",
+        "cantidad_recibida": "Cantidad actual de recipientes recibidos, enteros positivos y opcionales; no se acumula al corregir.",
+        "peso": "Peso declarado en kg, positivo, finito, opcional y con máximo un decimal; se rechaza precisión incompatible sin redondear.",
+        "peso_recibido": "Peso real recibido en kg, positivo, finito, opcional y con máximo un decimal; separado del declarado.",
+        "precio": "Precio vigente del ensayo en USD, obligatorio, finito, positivo y con máximo dos decimales; no es un precio histórico ni un pago.",
+        "fecha_estimada_arribo": "Fecha estimada de llegada de las muestras; opcional e independiente de la fecha objetivo de resultados.",
+        "fecha_objetivo": "Fecha objetivo de entrega de resultados, opcional; no sustituye el fin previsto de cada ensayo.",
+        "profundidad_inicial": "Profundidad inicial en metros, opcional, no negativa; precisión almacenada conservada, visualización con dos decimales.",
+        "profundidad_final": "Profundidad final en metros, opcional y no menor que la inicial; precisión almacenada conservada, visualización con dos decimales.",
         "estado_solicitud": "DRAFT, WAITING_ASSAYS, SUBMITTED, OBSERVED, APPROVED, REJECTED o CLOSED.",
         "interno": "true restringe el evento al personal autorizado; false permite verlo al autor de la solicitud.",
     }
@@ -187,17 +189,36 @@ OVERRIDES[("solicitudes", "empresa_id")] = (
     "Empresa conservada al crear la solicitud, independiente de cambios posteriores en el usuario. FK empresas.id."
 )
 OVERRIDES[("migraciones_esquema", "version")] = (
-    "Versión instalada, PK. Instalación limpia: 7; las migraciones conservan también las versiones previas."
+    "Versión instalada, PK. Instalación limpia: 9; las migraciones conservan también las versiones previas."
 )
 
 
-MEANINGS["estado_general"] = "Estado general: CREATED (Creado), CANCELLED (Cancelado) o CLOSED (Cerrado). Independiente de la etapa interna y los conteos derivados."
-OVERRIDES[("solicitudes", "estado_solicitud")] = "Etapa interna de envío/revisión que conserva privacidad de borradores y permisos. No es el filtro visible Estado Solicitud."
+MEANINGS["estado_general"] = (
+    "Estado general físico CREATED/CANCELLED/CLOSED. Si estado_solicitud=DRAFT, la interfaz y el filtro muestran Borrador; no se almacena un estado duplicado."
+)
+OVERRIDES[("solicitudes", "estado_solicitud")] = (
+    "Etapa interna de envío/revisión que conserva privacidad de borradores y permisos. No es el filtro visible Estado Solicitud."
+)
+OVERRIDES[("solicitudes", "proyecto_id")] = (
+    "Código AppControlHH o EXTERNO; NULL solo para borrador interno aún sin proyecto. Obligatorio al enviar una solicitud interna. Sin FK."
+)
+OVERRIDES[("muestras", "codigo_cliente")] = (
+    "Código declarado por el cliente, único por solicitud cuando está informado. NULL admite filas parciales de borrador; obligatorio antes del envío."
+)
+OVERRIDES[("muestras", "material")] = (
+    "Tipo de muestra declarado. NULL solo en borradores incompletos; obligatorio antes del envío. El formulario no inventa un tipo."
+)
+OVERRIDES[("ensayos_muestra", "observaciones")] = (
+    "Último motivo o nota operativa. La API proyecta solo motivos de observar/cancelar al cliente desde actividad; otras notas internas siguen restringidas."
+)
+
 
 def inspect_schema():
     with engine().connect() as db:
-        if rows(db, "SELECT max(version) version FROM migraciones_esquema")[0]["version"] != 7:
-            raise RuntimeError("El exportador requiere esquema 7 instalado; usa una base ficticia o aplica la actualización explícita antes de exportar.")
+        if rows(db, "SELECT max(version) version FROM migraciones_esquema")[0]["version"] != 9:
+            raise RuntimeError(
+                "El exportador requiere esquema 9 instalado; usa una base ficticia o aplica SQL07 antes de exportar."
+            )
         columns = rows(
             db,
             """SELECT table_name,column_name,data_type,is_nullable,column_default,is_identity
@@ -218,16 +239,14 @@ def inspect_schema():
             WHERE c.table_schema='public' AND c.constraint_type='PRIMARY KEY'""",
         )
     if {c["table_name"] for c in columns} != set(PURPOSE):
-        raise RuntimeError(
-            "El exportador requiere exclusivamente las 11 tablas del esquema v7"
-        )
+        raise RuntimeError("El exportador requiere exclusivamente las 11 tablas del esquema v9")
     return columns, foreign, primary
 
 
 def export_erd(columns, foreign, primary):
     lines = [
         "---",
-        "title: Laboratorio Lara Consulting · PostgreSQL v7",
+        "title: Laboratorio Lara Consulting · PostgreSQL v9",
         "config:",
         "  theme: neutral",
         "---",
@@ -261,26 +280,16 @@ def export_erd(columns, foreign, primary):
             }.get(col["data_type"], col["data_type"].replace(" ", "_"))
             relation = fk.get(key)
             tags = (["PK"] if key in pk else []) + (["FK"] if relation else [])
-            lines.append(
-                f"        {dtype} {name}" + (" " + ",".join(tags) if tags else "")
-            )
+            lines.append(f"        {dtype} {name}" + (" " + ",".join(tags) if tags else ""))
             default = col["column_default"] or (
                 "IDENTITY"
                 if col["is_identity"] == "YES"
-                else (
-                    "NULL"
-                    if col["is_nullable"] == "YES"
-                    else "Sin valor; debe suministrarse"
-                )
+                else ("NULL" if col["is_nullable"] == "YES" else "Sin valor; debe suministrarse")
             )
             description = OVERRIDES.get(key, MEANINGS.get(name))
             if not description:
                 raise RuntimeError(f"Falta descripción de {key}")
-            link = (
-                (relation["parent"] + "." + relation["parent_column"])
-                if relation
-                else "—"
-            )
+            link = (relation["parent"] + "." + relation["parent_column"]) if relation else "—"
             if key in pk:
                 link = "PK; " + link if relation else "PK"
             dictionary.append(
@@ -293,8 +302,7 @@ def export_erd(columns, foreign, primary):
             next(
                 c
                 for c in columns
-                if c["table_name"] == f["table_name"]
-                and c["column_name"] == f["column_name"]
+                if c["table_name"] == f["table_name"] and c["column_name"] == f["column_name"]
             )["is_nullable"]
             == "YES"
         )
@@ -310,9 +318,7 @@ def export_erd(columns, foreign, primary):
         "",
         text,
     )
-    readme.write_text(
-        text.rstrip() + "\n\n" + "\n".join(dictionary) + "\n", encoding="utf-8"
-    )
+    readme.write_text(text.rstrip() + "\n\n" + "\n".join(dictionary) + "\n", encoding="utf-8")
     (ROOT / "docs/schema-columns.json").write_text(
         json.dumps(columns, indent=2, ensure_ascii=False), encoding="utf-8"
     )
@@ -323,8 +329,8 @@ def export_openapi():
 
     models = {
         "auth/login": v.Login,
-        "requests": v.RequestCreate,
-        "requests/{rid}": v.RequestEdit,
+        "requests": v.DraftCreate,
+        "requests/{rid}": v.DraftEdit,
         "requests/{rid}/actions": v.Action,
         "requests/{rid}/assays": v.AssaysEdit,
         "requests/{rid}/assays/review": v.AssaysReview,
@@ -340,12 +346,14 @@ def export_openapi():
         "management/users/{id}": v.UserEdit,
         "management/users/{id}/password": v.Password,
         "management/catalog": v.Catalog,
+        "management/catalog/{id}": v.Catalog,
     }
+    strict_edit = v.RequestEdit.model_json_schema(ref_template="#/components/schemas/{model}")
     spec = {
         "openapi": "3.1.0",
         "info": {
             "title": "Laboratorio Lara Consulting",
-            "version": "7.0.0",
+            "version": "9.0.0",
             "description": "Sesión opaca en cookie lab_session. Escrituras requieren Origin exacto y X-CSRF-Token de GET /session. "
             "ADMIN administra; MANAGER dirige; TECH solo consulta sus solicitudes, muestras y ensayos asignados; CLIENT accede solo a sus propias solicitudes. Borradores exclusivos de su autor. "
             "En Azure, la clave de Functions se agrega exclusivamente en el proxy. version identifica la revisión de la solicitud. "
@@ -354,9 +362,7 @@ def export_openapi():
         "servers": [{"url": "/api"}],
         "paths": {},
         "components": {
-            "securitySchemes": {
-                "session": {"type": "apiKey", "in": "cookie", "name": "lab_session"}
-            },
+            "securitySchemes": {"session": {"type": "apiKey", "in": "cookie", "name": "lab_session"}},
             "schemas": {},
         },
         "security": [{"session": []}],
@@ -432,7 +438,10 @@ def export_openapi():
                     "sample_id": {"type": "string", "format": "uuid"},
                     "assay_status": {"enum": list(ASSAY_STATUSES)},
                     "request_status": {"enum": ["CREATED", "CANCELLED", "CLOSED"]},
-                    "workflow_status": {"type": "string", "description": "Etapa interna de envío/revisión."},
+                    "workflow_status": {
+                        "type": "string",
+                        "description": "Etapa interna de envío/revisión.",
+                    },
                     "state": {
                         "enum": [
                             "PENDING",
@@ -459,6 +468,15 @@ def export_openapi():
                     "review_reason": {
                         "type": "string",
                         "description": "Motivo público de la última decisión; historial de revisiones preservado.",
+                    },
+                    "state_reason": {
+                        "type": "string",
+                        "description": "Motivo público de observación/cancelación actual; proyectado de actividad, incluidos eventos anteriores internos.",
+                    },
+                    "state_reason_author": {"type": ["string", "null"]},
+                    "state_reason_at": {
+                        "type": ["string", "null"],
+                        "format": "date-time",
                     },
                     "can_review": {"type": "boolean"},
                     "can_resubmit": {"type": "boolean"},
@@ -506,31 +524,34 @@ def export_openapi():
                     "codigo_laboratorio": {"type": ["string", "null"], "maxLength": 60},
                     "quantity": {
                         "type": ["string", "number", "null"],
-                        "description": "Sacos declarados, entero positivo o desconocido.",
+                        "description": "Recipientes declarados, entero positivo o desconocido.",
                     },
                     "weight": {
                         "type": ["string", "number", "null"],
-                        "description": "Peso declarado en kg o desconocido; independiente de sacos.",
+                        "description": "Peso declarado en kg, positivo, máximo un decimal, o desconocido; independiente de recipientes.",
                     },
                     "received_quantity": {"type": ["string", "number", "null"]},
                     "received_weight": {
                         "type": ["string", "number", "null"],
-                        "description": "Peso recibido en kg.",
+                        "description": "Peso recibido en kg, positivo y máximo un decimal, o desconocido.",
                     },
                     "can_receive": {
                         "type": "boolean",
                         "description": "Permiso operativo sobre la muestra; recibir requiere además solicitud enviada; TECH requiere aprobación y asignación.",
                     },
-                    "can_print": {"type": "boolean", "description": "Permiso para imprimir muestras autorizadas, también en solicitudes canceladas o cerradas. No habilita escrituras."},
+                    "can_print": {
+                        "type": "boolean",
+                        "description": "Permiso para imprimir muestras autorizadas, también en solicitudes canceladas o cerradas. No habilita escrituras.",
+                    },
                 },
             },
         }
     )
+    spec["components"]["schemas"].update(strict_edit.pop("$defs", {}))
+    spec["components"]["schemas"]["RequestEdit"] = strict_edit
     for fn in app.get_functions():
         trigger = next(
-            b
-            for b in json.loads(fn.get_function_json())["bindings"]
-            if b["type"] == "httpTrigger"
+            b for b in json.loads(fn.get_function_json())["bindings"] if b["type"] == "httpTrigger"
         )
         route = trigger["route"]
         for method in trigger["methods"]:
@@ -564,18 +585,12 @@ def export_openapi():
                         "required": True,
                         "schema": {
                             "type": "string",
-                            **(
-                                {"enum": ["receipt", "labels"]}
-                                if name == "kind"
-                                else {"format": "uuid"}
-                            ),
+                            **({"enum": ["receipt", "labels"]} if name == "kind" else {"format": "uuid"}),
                         },
                     }
                 )
             if method not in ("get", "head"):
-                for name in (
-                    ["Origin"] if route == "auth/login" else ["Origin", "X-CSRF-Token"]
-                ):
+                for name in ["Origin"] if route == "auth/login" else ["Origin", "X-CSRF-Token"]:
                     op["parameters"].append(
                         {
                             "name": name,
@@ -586,9 +601,7 @@ def export_openapi():
                     )
                 model = models.get(route)
                 if model:
-                    schema = model.model_json_schema(
-                        ref_template="#/components/schemas/{model}"
-                    )
+                    schema = model.model_json_schema(ref_template="#/components/schemas/{model}")
                     spec["components"]["schemas"].update(schema.pop("$defs", {}))
                     for key, minimum, maximum in (
                         ("easting", 100000, 1000000),
@@ -602,11 +615,7 @@ def export_openapi():
                     op["requestBody"] = {
                         "required": True,
                         "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/" + model.__name__
-                                }
-                            }
+                            "application/json": {"schema": {"$ref": "#/components/schemas/" + model.__name__}}
                         },
                     }
                 if route.endswith("/reports"):
@@ -640,15 +649,27 @@ def export_openapi():
                 )
             if route == "requests/{rid}/actions":
                 op["description"] = (
-                    "Las acciones legacy approve y reject devuelven 409. Usar /assays/review o cancel con motivo. Cancelación por autor CLIENT o MANAGER: versión, transacción, conserva completados/rechazados e informes. close exige MANAGER, al menos un completado, muestras definidas, trabajo resuelto e informe. Canceladas/cerradas sin escrituras."
+                    "Las acciones legacy approve y reject devuelven 409. Usar /assays/review o cancel con motivo. submit exige declaración completa (incluidas muestras), admitiendo muestras sin ensayos. Un DRAFT no puede cancelarse. Cancelación por autor CLIENT o MANAGER: versión, transacción, conserva completados/rechazados e informes. close exige MANAGER, al menos un completado, muestras definidas, trabajo resuelto e informe. Canceladas/cerradas sin escrituras."
                 )
+            if route == "requests" and method == "post":
+                op["description"] = (
+                    "CLIENT crea un borrador privado parcial. Solo se omiten filas totalmente vacías; se validan valores informados y códigos repetidos. Para enviar usar actions submit con declaración completa."
+                )
+            if route == "requests/{rid}" and method == "put":
+                op["description"] = (
+                    "DRAFT usa DraftEdit parcial; las solicitudes enviadas exigen RequestEdit completo. La API decide desde el estado almacenado y comprueba versión/autor; no hay bandera de relajación elegible por cliente."
+                )
+                op["requestBody"]["content"]["application/json"]["schema"] = {
+                    "anyOf": [
+                        {"$ref": "#/components/schemas/DraftEdit"},
+                        {"$ref": "#/components/schemas/RequestEdit"},
+                    ]
+                }
             if route == "auth/login":
                 op["security"] = []
             if route in ("auth/login", "session"):
                 op["responses"]["200"]["content"] = {
-                    "application/json": {
-                        "schema": {"$ref": "#/components/schemas/SessionView"}
-                    }
+                    "application/json": {"schema": {"$ref": "#/components/schemas/SessionView"}}
                 }
             if method == "get":
                 for name in queries.get(route, []):
@@ -656,26 +677,26 @@ def export_openapi():
                         {
                             "type": "integer",
                             "minimum": 1,
-                            **(
-                                {"maximum": 100, "default": 30}
-                                if name == "limit"
-                                else {"default": 1}
-                            ),
+                            **({"maximum": 100, "default": 30} if name == "limit" else {"default": 1}),
                         }
                         if name in ("page", "limit")
                         else {"type": "string"}
                     )
-                    op["parameters"].append(
-                        {"name": name, "in": "query", "schema": schema}
-                    )
+                    op["parameters"].append({"name": name, "in": "query", "schema": schema})
                     if name in ("status", "state"):
                         op["parameters"][-1]["description"] = (
                             "Uno o varios códigos separados por comas; OR. En requests, SUBMITTED busca revisión pendiente en solicitudes enviadas/abiertas, incluidas APPROVED. WAITING_ASSAYS busca muestras sin ensayos en solicitudes enviadas/abiertas, incluidas APPROVED/OBSERVED. Otros códigos filtran el estado principal. En work, state filtra la ejecución."
                         )
                     if name == "assay_status":
-                        op["parameters"][-1]["description"] = "CSV OR: " + ", ".join(ASSAY_STATUSES) + ". Clasificación exclusiva: CANCELLED > revisión REJECTED > revisión PENDING > ejecución aprobada. WAITING_ASSAYS cuenta muestras sin ensayos de solicitudes CREATED; work devuelve filas informativas sin id ni acciones. Otros filtros AND."
+                        op["parameters"][-1]["description"] = (
+                            "CSV OR: "
+                            + ", ".join(ASSAY_STATUSES)
+                            + ". Clasificación exclusiva: CANCELLED > revisión REJECTED > revisión PENDING > ejecución aprobada. WAITING_ASSAYS cuenta muestras sin ensayos de solicitudes CREATED; work devuelve filas informativas sin id ni acciones. Otros filtros AND."
+                        )
                     if name == "request_status":
-                        op["parameters"][-1]["description"] = "CSV OR: CREATED, CANCELLED, CLOSED; independiente de etapas internas. Otros filtros AND."
+                        op["parameters"][-1]["description"] = (
+                            "CSV OR: DRAFT, CREATED, CANCELLED, CLOSED. DRAFT deriva de estado_solicitud y solo es accesible por su autor; CREATED excluye borradores. El JSON request_status conserva el valor físico CREATED/CANCELLED/CLOSED. Otros filtros AND."
+                        )
                     if name in ("requester", "organization", "selected"):
                         op["parameters"][-1]["description"] = (
                             "UUID; filtra únicamente dentro del alcance autorizado. selected obtiene la etiqueta de una opción al recargar."
@@ -702,7 +723,7 @@ def export_openapi():
                         )
                     if route == "reports" and name == "q":
                         op["parameters"][-1]["description"] = (
-                            "Coincidencia parcial sin distinguir mayúsculas en código o título de solicitud. "
+                            "Coincidencia parcial sin distinguir mayúsculas únicamente en código de solicitud. "
                             "No busca proyecto ni nombre de archivo; project es un filtro independiente combinado con AND."
                         )
                     if name == "sample_ids":
@@ -729,12 +750,23 @@ def export_openapi():
                                     "type": "object",
                                     "properties": {
                                         k: {"type": "integer", "minimum": 0}
-                                        for k in ("NOT_RECEIVED", "OBSERVED", "DAMAGED", "INSUFFICIENT")
+                                        for k in (
+                                            "NOT_RECEIVED",
+                                            "OBSERVED",
+                                            "DAMAGED",
+                                            "INSUFFICIENT",
+                                        )
                                     },
                                     "description": "Solo con view=reception: muestras por condición, calculadas en PostgreSQL sobre el alcance autorizado; cada muestra cuenta una vez. TECH solo asignadas. Sin OT se deriva de codigo_ot=null, independientemente de estos conteos.",
                                 },
                                 "codigo_ot": {"type": ["string", "null"]},
-                                "assay_counts": {"type": "object", "properties": {k: {"type": "integer", "minimum": 0} for k in ASSAY_STATUSES}, "description": "Una categoría por ensayo. WAITING_ASSAYS cuenta muestras, solo en CREATED. Alcance autorizado, cálculo SQL completo."},
+                                "assay_counts": {
+                                    "type": "object",
+                                    "properties": {
+                                        k: {"type": "integer", "minimum": 0} for k in ASSAY_STATUSES
+                                    },
+                                    "description": "Una categoría por ensayo. WAITING_ASSAYS cuenta muestras, solo en CREATED. Alcance autorizado, cálculo SQL completo.",
+                                },
                                 "pending_assays": {
                                     "type": "boolean",
                                     "description": "Al menos una muestra accesible sin ensayos definidos.",
@@ -757,7 +789,14 @@ def export_openapi():
                                 "properties": {
                                     "items": {
                                         "type": "array",
-                                        "items": ({"$ref": "#/components/schemas/WorkTask"} if route == "work" else {"type": "object", "properties": properties}),
+                                        "items": (
+                                            {"$ref": "#/components/schemas/WorkTask"}
+                                            if route == "work"
+                                            else {
+                                                "type": "object",
+                                                "properties": properties,
+                                            }
+                                        ),
                                     },
                                     "total": {"type": "integer"},
                                     "page": {"type": "integer"},
@@ -774,9 +813,7 @@ def export_openapi():
                                 "properties": {
                                     "items": {
                                         "type": "array",
-                                        "items": {
-                                            "$ref": "#/components/schemas/WorkTask"
-                                        },
+                                        "items": {"$ref": "#/components/schemas/WorkTask"},
                                     },
                                     "total": {"type": "integer"},
                                     "page": {"type": "integer"},
@@ -792,8 +829,8 @@ def export_openapi():
                                 "type": "object",
                                 "properties": {
                                     "project_id": {
-                                        "type": "string",
-                                        "description": "Código de catálogo o EXTERNO; no UUID/FK.",
+                                        "type": ["string", "null"],
+                                        "description": "Código de catálogo o EXTERNO; no UUID/FK. NULL solo en borrador interno incompleto.",
                                     },
                                     "status": {
                                         "enum": [
@@ -820,35 +857,36 @@ def export_openapi():
                                     "district": {"type": ["string", "null"]},
                                     "province": {"type": ["string", "null"]},
                                     "department": {"type": ["string", "null"]},
-                                    "easting": {
-                                        "type": ["string", "number", "null"],
-                                        "description": "Opcional e independiente; formato este seis dígitos enteros y norte siete; ambos admiten decimales. Históricos sin cambios se conservan.",
+                                    "target_date": {
+                                        "type": ["string", "null"],
+                                        "format": "date",
+                                        "description": "Fecha objetivo entrega resultados.",
                                     },
-                                    "northing": {
-                                        "type": ["string", "number", "null"],
-                                        "description": "Opcional e independiente; formato este seis dígitos enteros y norte siete; ambos admiten decimales. Históricos sin cambios se conservan.",
+                                    "estimated_arrival_date": {
+                                        "type": ["string", "null"],
+                                        "format": "date",
+                                        "description": "Fecha estimada arribo muestra.",
                                     },
                                     "codigo_ot": {"type": ["string", "null"]},
                                     "request_status": {"enum": ["CREATED", "CANCELLED", "CLOSED"]},
                                     "can_cancel": {"type": "boolean"},
-                                    "assay_counts": {"type": "object", "properties": {k: {"type": "integer", "minimum": 0} for k in ASSAY_STATUSES}},
+                                    "assay_counts": {
+                                        "type": "object",
+                                        "properties": {
+                                            k: {"type": "integer", "minimum": 0} for k in ASSAY_STATUSES
+                                        },
+                                    },
                                     "tasks": {
                                         "type": "array",
-                                        "items": {
-                                            "$ref": "#/components/schemas/WorkTask"
-                                        },
+                                        "items": {"$ref": "#/components/schemas/WorkTask"},
                                     },
                                     "samples": {
                                         "type": "array",
-                                        "items": {
-                                            "$ref": "#/components/schemas/ReceivedSampleView"
-                                        },
+                                        "items": {"$ref": "#/components/schemas/ReceivedSampleView"},
                                     },
                                     "activity": {
                                         "type": "array",
-                                        "items": {
-                                            "$ref": "#/components/schemas/HistoryEntry"
-                                        },
+                                        "items": {"$ref": "#/components/schemas/HistoryEntry"},
                                     },
                                 },
                             }
@@ -856,11 +894,143 @@ def export_openapi():
                     }
                 if "/download" in route or "/print/" in route:
                     op["responses"]["200"]["content"] = {
-                        "application/pdf": {
-                            "schema": {"type": "string", "format": "binary"}
-                        }
+                        "application/pdf": {"schema": {"type": "string", "format": "binary"}}
                     }
             spec["paths"].setdefault("/" + route, {})[method] = op
+    schemas = spec["components"]["schemas"]
+    for name in ("Sample", "SampleEdit", "ReceivedSampleView"):
+        if name not in schemas:
+            continue
+        for key, lo, hi in (
+            ("easting", 100000, 1000000),
+            ("northing", 1000000, 10000000),
+        ):
+            schemas[name]["properties"][key] = {
+                "type": ["string", "number", "null"],
+                "description": f"Coordenada de esta muestra, opcional e independiente. Finita entre {lo} inclusive y {hi} exclusivo, decimales admitidos. Validación de formato, no de ubicación.",
+            }
+        for key in ("depth_from", "depth_to"):
+            schemas[name]["properties"].setdefault(key, {"type": ["string", "number", "null"]})[
+                "description"
+            ] = "Metros; presentación con dos decimales sin modificar la precisión almacenada."
+    for name in ("Sample", "SampleEdit", "ReceivedSample", "ReceivedSampleView"):
+        if name in schemas:
+            for key in ("weight", "received_weight"):
+                if key in schemas[name]["properties"]:
+                    schemas[name]["properties"][key]["description"] = (
+                        "Kilogramos opcionales, positivos y finitos, máximo un decimal. Se rechaza precisión incompatible sin redondeo."
+                    )
+    schemas["Catalog"]["properties"]["price"]["description"] = (
+        "Precio vigente en USD, obligatorio, positivo, finito y máximo dos decimales."
+    )
+    catalog_properties = {
+        k: schemas["Catalog"]["properties"][k]
+        for k in ("code", "name", "method", "category", "active", "price")
+    }
+    catalog_properties["id"] = {"type": "string", "format": "uuid"}
+    spec["paths"]["/catalog"]["get"].update(
+        {
+            "description": "Metadatos de todos los ensayos autorizados. Selección solo de activos; los deshabilitados permiten mostrar selecciones históricas. price se devuelve únicamente a ADMIN/MANAGER.",
+            "responses": {
+                **spec["paths"]["/catalog"]["get"]["responses"],
+                "200": {
+                    "description": "Catálogo; precio solo para ADMIN/MANAGER",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": catalog_properties,
+                                },
+                            }
+                        }
+                    },
+                },
+            },
+        }
+    )
+    spec["paths"]["/management/catalog/{id}"]["put"]["description"] = (
+        "ADMIN edita por UUID código, nombre, método, categoría, precio USD y disponibilidad. Cambiar el código conserva ID y relaciones; un código duplicado devuelve409."
+    )
+    amount = {
+        "type": ["string", "number"],
+        "description": "Importe exacto en USD, serializado como decimal.",
+    }
+    schemas["EconomicSummary"] = {
+        "type": "object",
+        "properties": {
+            "currency": {"const": "USD"},
+            "price_basis": {"const": "current_catalog"},
+            "totals": {
+                "type": "object",
+                "properties": {k: amount for k in ("completed_total", "completed_month", "projected_total")},
+            },
+            "monthly": {
+                "type": "array",
+                "minItems": 12,
+                "maxItems": 12,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "month": {"type": "string", "format": "date"},
+                        "amount": amount,
+                    },
+                },
+            },
+            **{
+                k: {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string", "format": "uuid"},
+                            "name": {"type": "string"},
+                            "amount": amount,
+                        },
+                    },
+                }
+                for k in ("by_type", "by_organization")
+            },
+        },
+    }
+    spec["paths"]["/dashboard"]["get"]["description"] = (
+        "Agregaciones PostgreSQL completas por alcance. economics exclusivamente ADMIN/MANAGER: valor estimado de completados (incluso con solicitud cancelada) y proyección aprobada abierta. Precio vigente, una valoración por muestra–ensayo, fechas de Lima; no pagos ni utilidad neta. TECH conserva únicamente carga propia."
+    )
+    spec["paths"]["/dashboard"]["get"]["responses"]["200"]["content"] = {
+        "application/json": {
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "totals": {"type": "object"},
+                    "economics": {"$ref": "#/components/schemas/EconomicSummary"},
+                },
+                "description": "economics se omite para TECH.",
+            }
+        }
+    }
+    for route, key, description in (
+        (
+            "requests",
+            "q",
+            "Código de solicitud o proyecto; coincidencia parcial sin distinguir mayúsculas. No existe título de solicitud.",
+        ),
+        (
+            "work",
+            "request_q",
+            "Código de solicitud; coincidencia parcial sin distinguir mayúsculas.",
+        ),
+    ):
+        next(p for p in spec["paths"]["/" + route]["get"]["parameters"] if p["name"] == key)[
+            "description"
+        ] = description
+    for key in ("target_date", "estimated_arrival_date"):
+        spec["paths"]["/requests"]["get"]["responses"]["200"]["content"]["application/json"]["schema"][
+            "properties"
+        ]["items"]["items"]["properties"][key] = {
+            "type": ["string", "null"],
+            "format": "date",
+        }
     (ROOT / "docs/openapi.json").write_text(
         json.dumps(spec, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )

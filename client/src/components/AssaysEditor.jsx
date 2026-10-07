@@ -1,3 +1,4 @@
+import AssayPicker, { SelectedAssays } from "./AssayPicker";
 import useErrorNotice from "../hooks/useErrorNotice";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -6,6 +7,8 @@ import { PageHead, Button, ErrorBox } from "./ui";
 
 export default function AssaysEditor({ request, catalog }) {
   const navigate = useNavigate();
+  const [picker, setPicker] = useState(null);
+  const [selectedSamples, setSelectedSamples] = useState([]);
   const [samples, setSamples] = useState(request.samples),
     [busy, setBusy] = useState(false),
     [error, setError] = useErrorNotice();
@@ -16,9 +19,6 @@ export default function AssaysEditor({ request, catalog }) {
         t.assay_id === aid &&
         t.review_status !== "PENDING",
     );
-  const columns = catalog.filter(
-    (a) => a.active || samples.some((s) => s.assay_ids.includes(a.id)),
-  );
   async function save() {
     if (busy) return;
     setBusy(true);
@@ -50,60 +50,81 @@ export default function AssaysEditor({ request, catalog }) {
       />
       <ErrorBox>{error}</ErrorBox>
       <section className="card form-card">
-        <div className="table-scroll assay-edit-matrix">
+        <div className="sample-toolbar">
+          <span>{selectedSamples.length} muestras seleccionadas</span>
+          <Button
+            disabled={busy || !selectedSamples.length}
+            onClick={() => setPicker(selectedSamples)}
+          >
+            Añadir ensayo a seleccionadas
+          </Button>
+        </div>
+        <div className="table-scroll assay-edit-matrix assay-selector-table">
           <table>
             <thead>
               <tr>
+                <th>
+                  <input
+                    type="checkbox"
+                    aria-label="Seleccionar todas las muestras"
+                    checked={selectedSamples.length === samples.length}
+                    onChange={(e) =>
+                      setSelectedSamples(
+                        e.target.checked ? samples.map((s) => s.id) : [],
+                      )
+                    }
+                  />
+                </th>
                 <th>Muestra</th>
-                {columns.map((a) => (
-                  <th key={a.id}>{a.name}</th>
-                ))}
+                <th>Ensayos solicitados</th>
               </tr>
             </thead>
             <tbody>
               {samples.map((s) => (
                 <tr key={s.id}>
                   <td>
+                    <input
+                      type="checkbox"
+                      aria-label={`Seleccionar muestra ${s.client_code}`}
+                      checked={selectedSamples.includes(s.id)}
+                      onChange={(e) =>
+                        setSelectedSamples((old) =>
+                          e.target.checked
+                            ? [...old, s.id]
+                            : old.filter((id) => id !== s.id),
+                        )
+                      }
+                    />
+                  </td>
+                  <td>
                     <b>{s.client_code}</b>
                     <small className="block">{s.material}</small>
                   </td>
-                  {columns.map((a) => (
-                    <td key={a.id}>
-                      <input
-                        type="checkbox"
-                        aria-label={`${a.name} · ${s.client_code}`}
-                        checked={s.assay_ids.includes(a.id)}
-                        disabled={
-                          busy ||
-                          locked(s.id, a.id) ||
-                          (!a.active && !s.assay_ids.includes(a.id))
-                        }
-                        onChange={(e) =>
+                  <td className="sample-assays-column">
+                    <SelectedAssays
+                      ids={s.assay_ids}
+                      catalog={catalog}
+                      locked={s.assay_ids.filter((aid) => locked(s.id, aid))}
+                      onRemove={(aid) => {
+                        if (!busy)
                           setSamples((old) =>
                             old.map((row) =>
-                              row.id !== s.id
-                                ? row
-                                : {
+                              row.id === s.id
+                                ? {
                                     ...row,
-                                    assay_ids: e.target.checked
-                                      ? [...row.assay_ids, a.id]
-                                      : row.assay_ids.filter((v) => v !== a.id),
-                                  },
+                                    assay_ids: row.assay_ids.filter(
+                                      (id) => id !== aid,
+                                    ),
+                                  }
+                                : row,
                             ),
-                          )
-                        }
-                      />
-                      {locked(s.id, a.id) && (
-                        <small className="block">
-                          {request.tasks.find(
-                            (t) => t.sample_id === s.id && t.assay_id === a.id,
-                          )?.approved
-                            ? "Aprobado"
-                            : "Rechazado"}
-                        </small>
-                      )}
-                    </td>
-                  ))}
+                          );
+                      }}
+                    />
+                    <Button disabled={busy} onClick={() => setPicker([s.id])}>
+                      Añadir ensayo
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -115,6 +136,36 @@ export default function AssaysEditor({ request, catalog }) {
           </Button>
         </div>
       </section>
+      {picker && (
+        <AssayPicker
+          catalog={catalog}
+          existing={catalog
+            .filter((a) =>
+              picker.every((sid) =>
+                samples.find((s) => s.id === sid).assay_ids.includes(a.id),
+              ),
+            )
+            .map((a) => a.id)}
+          onClose={() => setPicker(null)}
+          onApply={(ids) => {
+            if (
+              samples.some(
+                (s) =>
+                  picker.includes(s.id) &&
+                  new Set([...s.assay_ids, ...ids]).size > 40,
+              )
+            )
+              throw new Error("Máximo 40 ensayos por muestra.");
+            setSamples((old) =>
+              old.map((s) =>
+                picker.includes(s.id)
+                  ? { ...s, assay_ids: [...new Set([...s.assay_ids, ...ids])] }
+                  : s,
+              ),
+            );
+          }}
+        />
+      )}
     </>
   );
 }

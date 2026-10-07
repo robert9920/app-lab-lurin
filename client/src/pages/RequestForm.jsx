@@ -1,6 +1,8 @@
 import useErrorNotice from "../hooks/useErrorNotice";
 import AssaysEditor from "../components/AssaysEditor";
 import NumericInput from "../components/NumericInput";
+import DepthInput from "../components/DepthInput";
+import AssayPicker, { SelectedAssays } from "../components/AssayPicker";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import {
@@ -27,6 +29,7 @@ import {
   parseSamples,
   prepareSample,
   sampleErrors,
+  hasSampleData,
 } from "../services/samples";
 
 const columns = [
@@ -35,11 +38,22 @@ const columns = [
   ["depth_from", "Prof. inicial (m)"],
   ["depth_to", "Prof. final (m)"],
   ["material", "Tipo de muestra *"],
-  ["quantity", "Sacos"],
+  ["quantity", "Recipientes"],
   ["weight", "Peso (kg)"],
+  ["easting", "Coordenadas Este"],
+  ["northing", "Coordenadas Norte"],
 ];
-const numbers = ["depth_from", "depth_to", "quantity", "weight"];
+const numbers = [
+  "depth_from",
+  "depth_to",
+  "quantity",
+  "weight",
+  "easting",
+  "northing",
+];
 function SampleValueInput({ kind, ...props }) {
+  if (["depth_from", "depth_to"].includes(kind))
+    return <DepthInput {...props} />;
   return ["quantity", "weight"].includes(kind) ? (
     <NumericInput
       {...props}
@@ -57,20 +71,16 @@ export default function RequestForm() {
   const [ready, setReady] = useState(false),
     [assaysRequest, setAssaysRequest] = useState(null),
     [reviewedTasks, setReviewedTasks] = useState([]),
-    [originalCoordinates, setOriginalCoordinates] = useState({}),
-    [coordinatesChecked, setCoordinatesChecked] = useState(false),
     [denied, setDenied] = useState(false),
     [catalog, setCatalog] = useState([]),
     [form, setForm] = useState({
       project_id: "",
-      title: "",
       notes: "",
       target_date: "",
+      estimated_arrival_date: "",
       district: "",
       province: "",
       department: "",
-      easting: "",
-      northing: "",
       samples: [blankSample()],
     }),
     [version, setVersion] = useState(1),
@@ -82,6 +92,7 @@ export default function RequestForm() {
     [paste, setPaste] = useState(false),
     [text, setText] = useState(""),
     [selected, setSelected] = useState([]),
+    [picker, setPicker] = useState(null),
     [showErrors, setShowErrors] = useState(false);
   useEffect(() => {
     Promise.all([
@@ -89,7 +100,7 @@ export default function RequestForm() {
       id ? api.get(`/requests/${id}`) : Promise.resolve(null),
     ])
       .then(([c, r]) => {
-        setCatalog(c.data.filter((a) => a.active));
+        setCatalog(c.data);
         if (r?.data.can_edit_assays) {
           setCatalog(c.data);
           setAssaysRequest(r.data);
@@ -105,21 +116,18 @@ export default function RequestForm() {
             setError("Esta solicitud ya no admite edición.");
             return;
           }
-          setOriginalCoordinates({ easting: d.easting, northing: d.northing });
           setVersion(d.version);
           setStatus(d.status);
           setInternal(d.is_internal);
           const f = {};
           for (const k of [
             "project_id",
-            "title",
             "notes",
             "target_date",
+            "estimated_arrival_date",
             "district",
             "province",
             "department",
-            "easting",
-            "northing",
           ])
             f[k] = d[k] ?? "";
           f.samples = d.samples.map((s) => ({
@@ -134,12 +142,15 @@ export default function RequestForm() {
                 "depth_to",
                 "quantity",
                 "weight",
+                "easting",
+                "northing",
                 "notes",
                 "assay_ids",
                 "received_at",
               ].map((k) => [k, s[k] ?? (k === "assay_ids" ? [] : "")]),
             ),
           }));
+          if (!f.samples.length) f.samples = [blankSample()];
           setForm(f);
         }
       })
@@ -161,46 +172,11 @@ export default function RequestForm() {
   const errors = form.samples.map((s) => sampleErrors(s, form.samples));
   const pending = form.samples.filter((s) => !s.assay_ids.length).length;
   const [cellNotice, setCellNotice] = useErrorNotice();
-  function invalidCoordinate(key) {
-    if (!coordinatesChecked || form[key] === "") return false;
-    if (
-      id &&
-      originalCoordinates[key] != null &&
-      Number(form[key]) === Number(originalCoordinates[key])
-    )
-      return false;
-    const value = Number(form[key]);
-    return (
-      !Number.isFinite(value) ||
-      value < (key === "easting" ? 100000 : 1000000) ||
-      value >= (key === "easting" ? 1000000 : 10000000)
-    );
-  }
   function next(e) {
     e.preventDefault();
-    setCoordinatesChecked(true);
     if (internal && !form.project_id) {
       setError("Selecciona un proyecto disponible.");
       return;
-    }
-    for (const [key, lower, upper, digits] of [
-      ["easting", 100000, 1000000, 6],
-      ["northing", 1000000, 10000000, 7],
-    ]) {
-      if (
-        form[key] === "" ||
-        (id &&
-          Number(form[key]) === Number(originalCoordinates[key]) &&
-          originalCoordinates[key] != null)
-      )
-        continue;
-      const value = Number(form[key]);
-      if (!Number.isFinite(value) || value < lower || value >= upper) {
-        setError(
-          `Coordenadas ${key === "easting" ? "Este" : "Norte"}: debe tener ${digits} dígitos enteros; se permiten decimales.`,
-        );
-        return;
-      }
     }
     setError("");
     setStep(1);
@@ -216,6 +192,21 @@ export default function RequestForm() {
     setStep(2);
   }
   async function save(submit = false) {
+    if (busy) return;
+    const draft = status === "DRAFT" && !submit;
+    const samples = form.samples.filter(hasSampleData);
+    if (
+      samples.some(
+        (sample) =>
+          Object.keys(sampleErrors(sample, samples, { required: !draft }))
+            .length,
+      )
+    ) {
+      setShowErrors(true);
+      setError("Revisa los valores de las muestras antes de guardar.");
+      setCellNotice("Revisa las celdas");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -223,9 +214,8 @@ export default function RequestForm() {
         ...form,
         project_id: internal ? form.project_id : id ? form.project_id : null,
         target_date: form.target_date || null,
-        easting: form.easting === "" ? null : Number(form.easting),
-        northing: form.northing === "" ? null : Number(form.northing),
-        samples: form.samples.map(prepareSample),
+        estimated_arrival_date: form.estimated_arrival_date || null,
+        samples: samples.map(prepareSample),
         ...(id ? { version } : {}),
       };
       const { data } = await api[id ? "put" : "post"](
@@ -317,20 +307,20 @@ export default function RequestForm() {
                   onChange={(v) => change("project_id", v)}
                 />
               ) : null}
-              <Field label="Fecha objetivo (opcional)">
+              <Field label="Fecha objetivo entrega resultados (opcional)">
                 <input
                   type="date"
                   value={form.target_date}
                   onChange={(e) => change("target_date", e.target.value)}
                 />
               </Field>
-              <Field label="Nombre de la solicitud *">
+              <Field label="Fecha estimada arribo muestra (opcional)">
                 <input
-                  required
-                  minLength={3}
-                  maxLength={180}
-                  value={form.title}
-                  onChange={(e) => change("title", e.target.value)}
+                  type="date"
+                  value={form.estimated_arrival_date}
+                  onChange={(e) =>
+                    change("estimated_arrival_date", e.target.value)
+                  }
                 />
               </Field>
               {[
@@ -347,20 +337,6 @@ export default function RequestForm() {
                   />
                 </Field>
               ))}
-              {[
-                ["easting", "Coordenadas Este"],
-                ["northing", "Coordenadas Norte"],
-              ].map(([k, l]) => (
-                <Field key={k} label={l + " (opcional)"}>
-                  <input
-                    type="number"
-                    step="any"
-                    aria-invalid={invalidCoordinate(k)}
-                    value={form[k]}
-                    onChange={(e) => change(k, e.target.value)}
-                  />
-                </Field>
-              ))}
             </div>
             <Field label="Indicaciones generales (opcional)">
               <textarea
@@ -370,6 +346,11 @@ export default function RequestForm() {
               />
             </Field>
             <div className="form-actions">
+              {status === "DRAFT" && (
+                <Button type="button" busy={busy} onClick={() => save(false)}>
+                  Guardar borrador
+                </Button>
+              )}
               <Button variant="primary">Continuar con las muestras</Button>
             </div>
           </form>
@@ -397,10 +378,17 @@ export default function RequestForm() {
               </div>
             </div>
             <p className="muted">
-              Una fila por muestra. Marca los ensayos conocidos; puedes dejar
-              casillas vacías. Las muestras recibidas conservan sus datos
+              Una fila por muestra. Añade los ensayos conocidos; puedes
+              definirlos después. Las muestras recibidas conservan sus datos
               declarados.
             </p>
+            {selected.length > 0 && (
+              <div className="actions sample-bulk-actions">
+                <Button onClick={() => setPicker([...selected])}>
+                  Añadir ensayos a {selected.length} muestras seleccionadas
+                </Button>
+              </div>
+            )}
             <div className="table-scroll sample-matrix">
               <table>
                 <thead>
@@ -422,25 +410,9 @@ export default function RequestForm() {
                     {columns.map(([k, l]) => (
                       <th key={k}>{l}</th>
                     ))}
-                    {catalog.map((a) => (
-                      <th key={a.id} className="assay-column">
-                        <span>{a.name}</span>
-                        {selected.length > 0 && (
-                          <input
-                            aria-label={
-                              "Aplicar " + a.name + " a filas seleccionadas"
-                            }
-                            type="checkbox"
-                            checked={selected.every((i) =>
-                              form.samples[i]?.assay_ids.includes(a.id),
-                            )}
-                            onChange={(e) =>
-                              setAssay(a.id, e.target.checked, selected)
-                            }
-                          />
-                        )}
-                      </th>
-                    ))}
+                    <th className="sample-assays-column">
+                      Ensayos solicitados
+                    </th>
                     <th>Observaciones</th>
                     <th>Acciones</th>
                   </tr>
@@ -475,9 +447,11 @@ export default function RequestForm() {
                             step={k === "quantity" ? "1" : "any"}
                             min={
                               numbers.includes(k)
-                                ? ["quantity", "weight"].includes(k)
-                                  ? "0.001"
-                                  : "0"
+                                ? k === "quantity"
+                                  ? "1"
+                                  : k === "weight"
+                                    ? "0.1"
+                                    : "0"
                                 : undefined
                             }
                             maxLength={100}
@@ -491,26 +465,19 @@ export default function RequestForm() {
                           )}
                         </td>
                       ))}
-                      {catalog.map((a) => (
-                        <td className="assay-cell" key={a.id}>
-                          <input
-                            type="checkbox"
-                            aria-label={
-                              a.name +
-                              " · " +
-                              (s.client_code || "fila " + (i + 1))
-                            }
-                            checked={s.assay_ids.includes(a.id)}
-                            disabled={reviewedTasks.some(
-                              (t) =>
-                                t.sample_id === s.id && t.assay_id === a.id,
-                            )}
-                            onChange={(e) =>
-                              setAssay(a.id, e.target.checked, [i])
-                            }
-                          />
-                        </td>
-                      ))}
+                      <td className="sample-assays-column">
+                        <SelectedAssays
+                          ids={s.assay_ids}
+                          catalog={catalog}
+                          locked={reviewedTasks
+                            .filter((t) => t.sample_id === s.id)
+                            .map((t) => t.assay_id)}
+                          onRemove={(aid) => setAssay(aid, false, [i])}
+                        />
+                        <Button onClick={() => setPicker([i])}>
+                          Añadir ensayo
+                        </Button>
+                      </td>
                       <td>
                         <textarea
                           aria-label={"Observaciones · fila " + (i + 1)}
@@ -567,25 +534,21 @@ export default function RequestForm() {
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td colSpan={columns.length + 1}>
+                    <td colSpan={columns.length + 4}>
                       {form.samples.length} muestras · {pending} con ensayos por
                       definir
                     </td>
-                    {catalog.map((a) => (
-                      <td key={a.id} className="assay-cell">
-                        {
-                          form.samples.filter((s) => s.assay_ids.includes(a.id))
-                            .length
-                        }
-                      </td>
-                    ))}
-                    <td colSpan={2} />
                   </tr>
                 </tfoot>
               </table>
             </div>
             <div className="form-actions">
               <Button onClick={() => setStep(0)}>Atrás</Button>
+              {status === "DRAFT" && (
+                <Button busy={busy} onClick={() => save(false)}>
+                  Guardar borrador
+                </Button>
+              )}
               <Button variant="primary" onClick={review}>
                 Revisar solicitud
               </Button>
@@ -595,7 +558,6 @@ export default function RequestForm() {
           <>
             <h2>Revisa tu solicitud</h2>
             <div className="review-summary">
-              <h3>{form.title}</h3>
               <p>
                 {internal ? form.project_id : "Cliente externo"} ·{" "}
                 {form.district}, {form.province}, {form.department}
@@ -626,6 +588,27 @@ export default function RequestForm() {
           </>
         )}
       </section>
+      {picker && (
+        <AssayPicker
+          catalog={catalog}
+          existing={catalog
+            .filter((a) =>
+              picker.every((i) => form.samples[i].assay_ids.includes(a.id)),
+            )
+            .map((a) => a.id)}
+          onClose={() => setPicker(null)}
+          onApply={(ids) => {
+            if (
+              picker.some(
+                (i) =>
+                  new Set([...form.samples[i].assay_ids, ...ids]).size > 40,
+              )
+            )
+              throw new Error("Máximo 40 ensayos por muestra.");
+            ids.forEach((aid) => setAssay(aid, true, picker));
+          }}
+        />
+      )}
       {paste && (
         <Modal
           title="Pegar muestras desde Excel"
@@ -635,7 +618,8 @@ export default function RequestForm() {
             <p>Copia filas sin encabezados, en este orden:</p>
             <p>
               Calicata / sondaje · Muestra · Prof. inicial · Prof. final · Tipo
-              · Sacos · Peso (kg) · Observaciones
+              · Recipientes · Peso (kg) · Observaciones · Coordenadas Este ·
+              Coordenadas Norte
             </p>
             <textarea
               rows={8}

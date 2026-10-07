@@ -4,16 +4,35 @@ import {
   parseSamples,
   prepareSample,
   sampleErrors,
+  hasSampleData,
 } from "./samples";
 describe("Muestras horizontales", () => {
+  it("conserva filas parciales y valida valores informados sin exigir datos de envío", () => {
+    expect(hasSampleData(blankSample())).toBe(false);
+    const partial = { ...blankSample(), borehole: "DH-01" };
+    expect(hasSampleData(partial)).toBe(true);
+    expect(hasSampleData({ ...blankSample(), id: "existing" })).toBe(true);
+    expect(sampleErrors(partial, [partial], { required: false })).toEqual({});
+    expect(
+      sampleErrors({ ...partial, weight: "1.11" }, [partial], {
+        required: false,
+      }),
+    ).toHaveProperty("weight");
+    expect(
+      sampleErrors({ ...partial, northing: "123456" }, [partial], {
+        required: false,
+      }),
+    ).toHaveProperty("northing");
+    expect(sampleErrors(partial, [partial])).toHaveProperty("client_code");
+  });
   it("separa sacos y kg y mantiene desconocidos y profundidad cero", () => {
     const [s] = parseSamples("DH-01\tM-01\t0\t2.5\tSuelo\t\t15.4\tNota");
     const r = prepareSample(s);
     expect(r.client_code).toBe("M-01");
-    expect(r.depth_from).toBe(0);
-    expect(r.depth_to).toBe(2.5);
+    expect(r.depth_from).toBe("0");
+    expect(r.depth_to).toBe("2.5");
     expect(r.quantity).toBeNull();
-    expect(r.weight).toBe(15.4);
+    expect(r.weight).toBe("15.4");
     expect(r.assay_ids).toEqual([]);
     expect(r).not.toHaveProperty("unit");
   });

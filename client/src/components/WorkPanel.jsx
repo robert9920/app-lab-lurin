@@ -171,6 +171,26 @@ export default function WorkPanel({ request, user, onDone, bulk = false }) {
                       )}
                       <td>
                         <Badge state={t.assay_status || assayStatus(t)} />
+                        {t.state_reason && (
+                          <div className="assay-state-reason">
+                            <strong>
+                              {t.state === "CANCELLED"
+                                ? "Motivo de cancelación"
+                                : "Motivo de observación"}
+                            </strong>
+                            <span className="comment-text">
+                              {t.state_reason}
+                            </span>
+                            <small>
+                              {[
+                                t.state_reason_author,
+                                t.state_reason_at && fmtDate(t.state_reason_at),
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </small>
+                          </div>
+                        )}
                         {t.row_kind !== "sample_without_assays" && (
                           <AssayReviewState
                             showBadge={false}

@@ -1,25 +1,63 @@
-# Laboratorio Lara Consulting · esquema 7
+# Laboratorio Lara Consulting · esquema 9
 
 Aplicación de solicitudes, recepción, ensayos e informes. React JavaScript, Vite y Tailwind CSS en `client`; Python 3.12 y Azure Functions HTTP en `api`; PostgreSQL como persistencia real. Interfaz en español, fechas presentadas en America/Lima.
 
 ## Cambios y compatibilidad
 
-Producción conserva la base **lab_lc** y local **lab_lc_v3**. Los nombres JSON existentes se conservan mediante api/schema_names.py (por ejemplo weight → peso, easting/northing → coordenada_este/coordenada_norte). El número del esquema, ahora **7**, es independiente del nombre de la base. No se requiere crear otra base para actualizar. Hay once tablas; se retiraron `proyectos` y `miembros_proyecto`. El proyecto es un código de texto en `solicitudes.proyecto_id`, sin FK entre bases. `empresa_id` conserva la empresa de la solicitud aunque después se cambie la empresa del autor.
+Producción conserva la base **lab_lc** y local **lab_lc_v3**. Los nombres JSON existentes se conservan mediante api/schema_names.py (por ejemplo weight → peso, easting/northing → coordenada_este/coordenada_norte). El número del esquema, ahora **9**, es independiente del nombre de la base. No se requiere crear otra base para actualizar. Hay once tablas; se retiraron `proyectos` y `miembros_proyecto`. El proyecto es un código de texto en `solicitudes.proyecto_id`, sin FK entre bases. `empresa_id` conserva la empresa de la solicitud aunque después se cambie la empresa del autor.
 
 El acceso sigue usando contraseña Argon2id, sesiones opacas y CSRF. El administrador crea usuarios y restablece contraseñas; no se envían correos ni enlaces. Sin MFA, invitaciones ni FERNET_KEY. Fernet cifraba secretos de funciones retiradas y nunca intervino en el hash de contraseñas. No se puede recuperar una contraseña del hash.
 
-## Actualizar una instalación existente
+## Actualizar esquema 8 a 9: borradores y comentarios
 
-1. Respaldar PostgreSQL y PDF y poner la aplicación en mantenimiento; detener versiones anteriores durante la actualización.
-2. Verificar `SELECT current_database(); SELECT max(version) FROM migraciones_esquema;` en la base deseada: Azure **lab_lc**, local **lab_lc_v3**.
-3. **Si la versión es 6, ejecutar SOLO la nueva sección 6→7** de `sql/05_actualizacion_solicitudes.sql`, desde «NUEVA SECCIÓN — Actualización de esquema 6 a 7: estados de solicitud y resumen de ensayos» hasta su COMMIT. No repetir secciones anteriores. En versión 5 ejecutar 5→6 y 6→7; en versión 4, 4→5, 5→6 y 6→7; en versión 3, el archivo completo. En versión 7 no repetir. No ejecutar 01 ni demo sobre una base existente.
-4. Comprobar versión7. `solicitudes.estado_general` añade CREATED/CANCELLED/CLOSED; los rechazos globales históricos se convierten en cancelaciones y sus ensayos abiertos no rechazados se cancelan con historial. Preserva decisiones, resultados completados, técnicos, fechas, informes y cierres históricos. No añade tablas.
-5. Publicar `api` y `client` coordinadamente y reiniciar. **No hay nuevas variables ni servicios Azure respecto al esquema 6**; conservar la configuración que ya funciona. `python manage.py migrate` reconoce 3/4/5/6/7 y es una alternativa explícita al SQL, no un paso adicional automático al publicar.
-6. Probar conteos y filtros en Solicitudes/Trabajo, revisión y ejecución parcial, cancelación con motivo, cierre con un completado y PDF antes de reabrir. Para revertir, restaurar juntos respaldo de base y paquetes anteriores; no borrar archivos PDF.
+La actualización **conserva todos los datos y correlativos**. Azure sigue usando `lab_lc`; local `lab_lc_v3`.
 
-Las cantidades existentes se conservan numéricamente como **sacos**; no se convierten a peso. Si hay cantidades fraccionarias o no finitas, 05 aborta antes de modificar el esquema: revisar con el laboratorio y corregir explícitamente antes de reintentar. Los nuevos pesos, geografía y OT quedan NULL en registros históricos; no se inventan valores. Al editar una solicitud histórica se deberán completar distrito, provincia y departamento. Las coordenadas este y norte permanecen opcionales, incluso al editar.
+1. Respaldar PostgreSQL, conservar los paquetes actuales y detener el backend durante el SQL y la publicación.
+2. Comprobar `SELECT current_database(); SELECT max(version) FROM migraciones_esquema;`. Con versión **8**, ejecutar **`sql/07_actualizacion_borradores.sql` completo**, como propietario, de BEGIN a COMMIT. Si falla, ejecutar ROLLBACK antes de reintentar.
+3. Verificar versión **9** y publicar **api** y **client** coordinadamente. No hacen falta variables, servicios Azure ni cambios de almacenamiento nuevos.
+4. Probar guardar/recuperar borradores desde los tres pasos y consultar motivos de observación/cancelación con cliente y personal.
 
-Las solicitudes existentes conservan su código de proyecto, incluido un código antiguo de un cliente externo. Las nuevas externas usan `EXTERNO`. Los ensayos ya RUNNING conservan observar/completar aunque su solicitud antigua no tenga OT; para nuevas asignaciones, inicio o reanudación se necesita OT.
+**No repetir SQL06:** reinicia datos y pertenece únicamente al antecedente 7→8. No ejecutar SQL01 ni demo sobre una base existente. SQL07 solo permite NULL en proyecto aún no seleccionado y código/material de muestras incompletas; mantiene once tablas, relaciones, unicidad de códigos informados, informes y auditoría.
+
+### Borradores y comentarios
+
+- Guardar borrador está disponible en los tres pasos. Conserva datos parciales, omite filas completamente vacías y permite guardar sin muestras. Los valores introducidos siguen validándose. Al enviar se exige proyecto interno, distrito/provincia/departamento y al menos una muestra completa (Muestra/Tipo); sus ensayos siguen siendo opcionales. Las solicitudes enviadas mantienen sus requisitos actuales.
+- Estado Solicitud muestra **Borrador** cuando `status=DRAFT`. Es una presentación derivada: el campo físico estado_general y JSON request_status siguen CREATED/CANCELLED/CLOSED. El filtro `request_status=DRAFT` es privado del autor y CREATED excluye borradores. No se añade otro estado físico. Un borrador no puede cancelarse, tampoco por API.
+- Después de guardar se abre la ficha; Editar solicitud recupera el progreso. Versiones y permisos se validan en servidor.
+- Indicaciones generales aparece en el listado Solicitudes y al pie izquierdo del resumen junto a las acciones. Las muestras tienen columna Comentarios. Los textos conservan saltos de línea, se ajustan y no se interpretan como HTML; no se crean bloques vacíos.
+- Observar/cancelar un ensayo muestra motivo, responsable y fecha junto al estado y en el historial del cliente. Los campos JSON `state_reason`, `state_reason_author` y `state_reason_at` se calculan desde actividad, incluidos eventos antiguos; no hay columnas nuevas ni modificación del historial. Las otras notas internas permanecen restringidas y TECH conserva su alcance.
+- Las búsquedas por nombre de Usuarios, Empresas y Catálogo ignoran tildes y mayúsculas: Lucia encuentra Lucía. No se cambian nombres guardados ni otros buscadores.
+
+## Antecedente: actualización 7 a 8 con reinicio autorizado
+
+**SQL06 reinicia los datos operativos, conforme a la decisión aprobada.** Borra solicitudes, muestras, ensayos, metadatos de informes y su historial asociado, además del catálogo anterior. Conserva empresas, usuarios, contraseñas, sesiones, límites de acceso, historial administrativo y correlativos. No ejecutar sobre datos que se deban conservar sin un respaldo recuperable.
+
+1. Respaldar PostgreSQL y PDF, conservar los paquetes anteriores y detener el acceso/backend anterior durante SQL y publicación.
+2. En pgAdmin comprobar `SELECT current_database(); SELECT max(version) FROM migraciones_esquema;`: Azure **lab_lc**, local **lab_lc_v3**. Si está en 3–6, aplicar primero las secciones pendientes de SQL05 hasta 7; nunca repetir una sección instalada.
+3. Antes del reinicio exportar `SELECT clave_archivo FROM informes;` para identificar los PDF anteriores. Con el propietario, en versión **7**, ejecutar **sql/06_actualizacion_catalogo_muestras.sql completo**, desde BEGIN hasta COMMIT. Es una sola transacción y exige exactamente versión 7; restablece las protecciones de informes/historial antes de finalizar. Si falla, ejecutar ROLLBACK y resolver la causa antes de reintentar.
+4. Comprobar versión **8**, once tablas y `SELECT count(*) FROM catalogo_ensayos;` = **58**. Solicitudes/muestras/ensayos/informes estarán vacíos. `numero_solicitud` no se reinicia: los siguientes códigos continúan el correlativo anterior.
+5. Publicar **api** y **client** coordinadamente; conservar variables, origen, proxy, TLS, identidad Blob y comandos de inicio. **No se necesitan nuevas variables ni servicios Azure.** No mezclar paquetes anteriores con esquema 8. No ejecutar SQL01, demo ni SQL06 otra vez sobre esta instalación.
+6. Comprobar login conservado, precios, nueva solicitud sin título, coordenadas por muestra, selección de ensayos, aprobación, recepción e informe. Para revertir, restaurar conjuntamente base y paquetes anteriores.
+
+`python manage.py migrate` solo instala una base vacía o reconoce esquema 9; **no ejecuta actualizaciones ni SQL06/SQL07 automáticamente**. Las bases antiguas reciben instrucciones para la actualización explícita. Los PDF físicos anteriores permanecen privados en Blob/carpeta local; después de validar el respaldo, se pueden eliminar por separado únicamente las claves exportadas y que ya no estén referenciadas. No borrar un contenedor ni una carpeta completa que pueda contener documentos nuevos; la política de retención/versionado de Blob puede conservar versiones eliminadas.
+
+## Catálogo y estimaciones económicas
+
+SQL02 (base vacía) y SQL06 incorporan los **58 nombres y precios de ID_Ensayos**, hoja del Excel original `Referencia/Ensayos_Laboratorio_Lurin.xlsx`, filas A2:B59. Excluyen Trabajo de Campo y Trabajo de Oficina, sin precio. Códigos LC-001 a LC-058 en el orden del Excel; método inicial «Por confirmar con laboratorio», todos activos. Las categorías organizan las familias de ensayos y son editables. No se modifica el archivo de referencia.
+
+ADMIN crea/edita por UUID código, nombre, método, categoría, precio y disponibilidad. Cambiar código mantiene la identidad; códigos duplicados devuelven conflicto. Precio obligatorio, positivo, finito, máximo dos decimales, en **USD**. Catálogo muestra Precio; los encabezados de Usuarios/Empresas/Catálogo son Permisos/Tipo Empresa/Categoría. Filtros por nombre y estado en las tres pestañas; Usuarios añade empresa/rol y Catálogo categoría. Selectores buscables, roles OR, otros filtros AND; se conservan en URL y Borrar filtros está centrado.
+
+Solo ADMIN/MANAGER reciben `price` en GET /catalog y `economics` en GET /dashboard. TECH conserva su dashboard operativo; CLIENT no recibe importes. Las estimaciones se agregan en PostgreSQL sobre todos los registros, sin límite de página. No representan cobros, pagos ni utilidad neta:
+
+| Métrica USD | Definición |
+|---|---|
+| Completados acumulados | Suma del precio vigente por cada ensayo aprobado COMPLETED de solicitudes enviadas; incluye completados de solicitudes posteriormente canceladas. |
+| Completados del mes | Misma suma, con completado_en dentro del mes actual en America/Lima. |
+| Proyección | Precio vigente de ensayos APPROVED pendientes/en ejecución/observados, de solicitudes APPROVED con estado_general CREATED. Excluye solicitudes canceladas, ensayos rechazados y cancelados. |
+| Serie mensual | Doce meses hasta el mes actual, por fecha de finalización en Lima; incluye meses con cero. |
+| Distribución tipo/empresa | Valor completado, una vez por ensayo–muestra; usa la empresa conservada en la solicitud. |
+
+**Se utiliza el precio actual, por decisión del proyecto:** editarlo recalcula también importes anteriores. No se almacena precio histórico en ensayos_muestra. El dashboard permite desplegar todas las categorías de las distribuciones.
 
 ## Instalación local con dos ventanas de Anaconda
 
@@ -27,7 +65,7 @@ Requisitos: Anaconda/Miniconda, PostgreSQL en ejecución, Python 3.12, Node.js 2
 
 ### Base vacía
 
-En pgAdmin conectado a `postgres`, ejecutar `sql/00_create_database_local.sql` fuera de transacción. Cambiar a `lab_lc_v3` y ejecutar en orden `01_schema.sql`, `02_catalog.sql` y, solo para demostración, `03_demo.sql`. 01 instala directamente esquema 7. **No ejecutar 05 después de 01**, pues 05 actualiza instalaciones anteriores 3/4/5/6. `04_runtime_permissions.sql` concede permisos a una cuenta PostgreSQL limitada opcional, distinta de los roles de usuarios del portal; quien utilice una cuenta existente debe revisar sus permisos. En Azure, el SQL 00 oficial crea `lab_lc`.
+En pgAdmin conectado a `postgres`, ejecutar `sql/00_create_database_local.sql` fuera de transacción. Cambiar a `lab_lc_v3` y ejecutar en orden `01_schema.sql`, `02_catalog.sql` y, solo para demostración, `03_demo.sql`. 01 instala directamente esquema 9. **No ejecutar 05, 06 ni 07 después de 01**: son actualizaciones para bases anteriores, y 06 reinicia datos. `04_runtime_permissions.sql` concede permisos a una cuenta PostgreSQL limitada opcional, distinta de los roles de usuarios del portal; quien utilice una cuenta existente debe revisar sus permisos. En Azure, el SQL 00 oficial crea `lab_lc`.
 
 ### Ventana 1: backend
 
@@ -63,7 +101,7 @@ python manage.py bootstrap
 func start
 ```
 
-`migrate` instala una base vacía o actualiza esquema 3/4/5 mediante los bloques correspondientes de 05; no lo ejecutar mientras la versión anterior esté sirviendo peticiones. `bootstrap` inicializa el administrador sin contraseña incorporada. Para datos ficticios: `python manage.py demo`, después `python manage.py password --email admin@example.com` y repetir para las cuentas a usar. `demo` rechaza lab_lc para proteger producción; si se desea una prueba pública con SQL ficticio, cargarlo manualmente y establecer contraseñas desde una ventana privada. Nunca cargar demostración sobre datos reales.
+`migrate` instala una base vacía o reconoce esquema 9; no ejecuta actualizaciones destructivas. Una base anterior debe actualizarse explícitamente con las secciones pendientes de SQL05/SQL06 y SQL07, con respaldo y la aplicación detenida. `bootstrap` inicializa el administrador sin contraseña incorporada. Para datos ficticios: `python manage.py demo`, después `python manage.py password --email admin@example.com` y repetir para las cuentas a usar. `demo` rechaza lab_lc para proteger producción; si se desea una prueba pública con SQL ficticio, cargarlo manualmente y establecer contraseñas desde una ventana privada. Nunca cargar demostración sobre datos reales.
 
 ### Ventana 2: frontend
 
@@ -108,11 +146,11 @@ No ejecutar estos GRANT sin sustituir la cuenta real. También puede utilizarse 
 
 ## Solicitudes y trabajo del laboratorio
 
-- **Datos generales:** proyecto solo para la empresa interna; nombre, distrito, provincia y departamento obligatorios. Fecha objetivo, indicaciones y coordenadas este/norte opcionales. No se asume zona UTM ni sistema geodésico a partir de estos números.
-- **Matriz de muestras:** una fila por muestra, hasta 200. Calicata/sondaje y profundidades opcionales; Muestra y Tipo de muestra obligatorios. Sacos: entero positivo o desconocido; Peso: kg positivo o desconocido. Observaciones opcionales. Ensayos en columnas, casillas individuales o aplicadas a filas seleccionadas; duplicación y pegado tabulado de ocho columnas descriptivas desde Excel. No se importan automáticamente los Excel originales.
+- **Datos generales:** proyecto solo para la empresa interna; distrito, provincia y departamento obligatorios. Fecha objetivo entrega resultados, fecha estimada arribo muestra e indicaciones opcionales. No existe nombre/título de solicitud; se identifica mediante su código. Las coordenadas se declaran por muestra, ambas opcionales e independientes. No se asume zona UTM ni sistema geodésico a partir de estos números.
+- **Matriz de muestras:** una fila por muestra, hasta 200. Calicata/sondaje, profundidades, coordenadas y observaciones opcionales; Muestra y Tipo de muestra obligatorios. Recipientes: entero positivo o desconocido; peso: kg positivo, máximo un decimal o desconocido. Añadir ensayo abre un selector por nombre/código/método y categoría, con métodos visibles, solo ensayos activos y selección múltiple. Se reutiliza en Solicitar ensayos y para varias muestras; las selecciones revisadas siguen protegidas. Máximo 40 ensayos por muestra. Duplicación y pegado tabulado desde Excel conservados. Orden del pegado: calicata/sondaje, muestra, profundidad inicial, profundidad final, tipo, recipientes, peso, observaciones, coordenadas este, coordenadas norte; las dos últimas celdas pueden omitirse. No se importan automáticamente los Excel originales.
 - **Envío:** se admiten muestras sin ensayos. La etapa interna es WAITING_ASSAYS si alguna muestra carece de ensayos o SUBMITTED cuando todas los tienen. Estas etapas controlan envío, privacidad y recepción; no son el Estado Solicitud visible. Los conteos muestran por separado revisiones pendientes y muestras sin ensayos.
 - **Edición antes de aprobar:** el autor CLIENT puede editar antes de aprobación, también después de enviar. Desde el envío, el proyecto no cambia. Una muestra recibida conserva su identidad y datos declarados: no se elimina ni se modifica; se pueden incorporar ensayos después. Cambios concurrentes devuelven conflicto para recargar antes de reintentar.
-- **Recepción:** jefatura recibe solicitudes enviadas, incluso pendientes de ensayos. TECH recibe solo muestras asignadas de solicitudes aprobadas. Sacos y peso recibidos son datos independientes de los declarados; fecha/hora y transporte se aplican al grupo seleccionado. Recepciones parciales y correcciones mantienen historial y motivo.
+- **Recepción:** jefatura recibe solicitudes enviadas, incluso pendientes de ensayos. TECH recibe solo muestras asignadas de solicitudes aprobadas. Recipientes y peso recibidos son datos independientes de los declarados; fecha/hora y transporte se aplican al grupo seleccionado. Recepciones parciales y correcciones mantienen historial y motivo.
 - **OT:** botón Generar OT en Recepción, exclusivo jefatura; código manual normalizado. Requiere al menos una muestra recibida, aunque esté observada/dañada/insuficiente y falten otras. No habilita por sí sola material no conforme. Cambiar una OT exige motivo. Un único texto por solicitud; no se crea tabla de órdenes.
 - **Revisión individual:** «Revisar ensayos» permite aprobar o rechazar cada ensayo pendiente, guardar decisiones distintas juntas o revisar uno solo. Rechazar exige motivo; los no seleccionados continúan pendientes. La primera aprobación lleva la solicitud a APPROVED. Si todos se rechazan, sin ninguno aprobado ni pendiente, queda OBSERVED. Los nuevos y los rechazados no pueden asignarse ni ejecutarse; el trabajo aprobado continúa. Revisión y ejecución son campos distintos; asignación sigue derivándose de tecnico_id.
 - **Estados:** pendiente ámbar, ejecución azul, observado rojo, completado verde, cancelado gris. Responsable/jefatura pueden observar/completar solamente después de iniciar. Solo jefatura cancela o retoma con motivo; retomar conserva la fecha inicial. La selección masiva muestra solo acciones válidas para todos y es atómica.
@@ -135,13 +173,13 @@ Solicitudes/Recepción/Trabajo/Informes muestran solicitante y empresa a ADMIN/M
 
 **Estado Solicitud** usa `request_status=CREATED,CANCELLED,CLOSED` y corresponde a `solicitudes.estado_general`: Creado, Cancelado o Cerrado. El estado no cambia al revisar o ejecutar ensayos. JSON `status` conserva la etapa interna `estado_solicitud`; `assay_counts` se calcula en SQL sobre todas las filas autorizadas, sin guardar contadores. La ficha reutiliza el resumen del listado. La API conserva `status`, `state` y `pending_assays` para consultas antiguas; Recepción conserva sus filtros operativos, excluyendo solicitudes canceladas. Los enlaces internos de carga usan el nuevo `assay_status`.
 
-`created_from` y `created_to` incluyen los días completos en America/Lima; filtran creación de solicitud. URL conserva filtros y paginación. «Borrar filtros», centrado en los cuatro paneles, limpia todos los parámetros, incluido pending_assays, vuelve a página 1 y reinicia las búsquedas de selectores, conservando la sección. Solicitudes muestra Fecha de creación en Lima y conserva Fecha objetivo. El cliente externo sin roles operativos no ve Proyecto.
+`created_from` y `created_to` incluyen los días completos en America/Lima; filtran creación de solicitud. URL conserva filtros y paginación. «Borrar filtros», centrado en los cuatro paneles, limpia todos los parámetros, incluido pending_assays, vuelve a página 1 y reinicia las búsquedas de selectores, conservando la sección. Solicitudes muestra Fecha de creación en Lima y conserva Fecha objetivo entrega resultados. El cliente externo sin roles operativos no ve Proyecto.
 
 **Recepción** muestra «Estado Recepción»: cantidades de muestras sin recibir, observadas, dañadas e insuficientes, más «Sin OT» cuando falta `codigo_ot`. Pueden coexistir varios indicadores; no representan aprobación ni ejecución de ensayos. `/requests?view=reception` devuelve `reception_counts` con `NOT_RECEIVED`, `OBSERVED`, `DAMAGED` e `INSUFFICIENT`, calculados en PostgreSQL y limitados a las muestras accesibles (TECH: asignadas). El único selector de estado en esta página es «Estado de recepción»: `condition=NOT_RECEIVED`, `issues` o `NO_OT`; los demás filtros se conservan. La interfaz retira `status` de enlaces antiguos de Recepción y reinicia su página, conservando las demás selecciones. Las reglas de recepción/OT y las exclusiones de solicitudes terminales no cambian.
 
-**Informes** (`/reports`) sirve para consultar, visualizar y descargar versiones ya cargadas. La carga de PDF permanece en **Documentos**, dentro de la solicitud, con los permisos actuales. «Buscar solicitud» usa `q` para coincidencias parciales en código o título de solicitud sin distinguir mayúsculas; no busca proyecto ni nombre de archivo. Proyecto conserva su filtro independiente (`project`), combinado con los demás mediante AND. Estos ajustes no requieren SQL ni nuevas variables o servicios Azure; publicar API y frontend coordinadamente. El esquema continúa en versión 7.
+**Informes** (`/reports`) sirve para consultar, visualizar y descargar versiones ya cargadas. La carga de PDF permanece en **Documentos**, dentro de la solicitud, con los permisos actuales. «Buscar solicitud» usa `q` para coincidencias parciales únicamente en código de solicitud sin distinguir mayúsculas; no busca proyecto ni nombre de archivo. Proyecto conserva su filtro independiente (`project`), combinado con los demás mediante AND. Estos ajustes no requieren SQL ni nuevas variables o servicios Azure; publicar API y frontend coordinadamente. El esquema actual es 8.
 
-Coordenadas opcionales e independientes: este `100000 ≤ valor < 1000000`, norte `1000000 ≤ valor < 10000000`, números finitos con decimales permitidos. Es validación de formato, no de posición, zona ni datum. No se reescriben coordenadas históricas; se valida una coordenada histórica al modificarla. Profundidad cero sigue siendo válida y es independiente de esta regla.
+Coordenadas opcionales e independientes: este `100000 ≤ valor < 1000000`, norte `1000000 ≤ valor < 10000000`, números finitos con decimales permitidos. Es validación de formato, no de posición, zona ni datum. Se guardan en muestras, no en solicitudes; el reinicio autorizado no migra coordenadas antiguas. Profundidad cero sigue siendo válida y es independiente de esta regla.
 
 `Loading` distingue carga de vacío y error; `NetworkLoading` indica consultas y descargas en curso. Los listados conservan sus datos mientras se actualizan. Los controles de envío usan `busy` para impedir envíos duplicados. Los avisos de error usan `useErrorNotice` y `ErrorBox`: visibles 5 segundos, desvanecimiento de 500 ms; un nuevo error idéntico reinicia el plazo. Las marcas de campos inválidos permanecen hasta corregirse. El estado de fallo de una consulta se conserva separado del aviso: desaparecer no inicia otra carga. Los selectores y consultas recuperables permiten reintentar.
 
@@ -149,7 +187,7 @@ Coordenadas opcionales e independientes: este `100000 ≤ valor < 1000000`, nort
 
 La cabecera muestra el nombre completo registrado y la empresa debajo, sin etiquetas de rol añadidas ni truncamiento; en móvil permite varias líneas. Inicio de sesión y sesión incluyen `organization_name`. Los nombres existentes no se editan automáticamente: un texto como «cliente interno» que forme parte del nombre registrado seguirá apareciendo hasta que el administrador lo cambie.
 
-`NumericInput` se usa en sacos/peso de declaración y recepción. Sacos: mínimo 1, entero e incremento 1. Peso: positivo e incremento 0.1 kg. Las flechas son botones propios para no imponer un step de 0.1 a los decimales escritos: por ejemplo, 0.025 permanece 0.025 y la flecha suma 0.1 sin redondearlo a una décima. Profundidades conservan sus controles anteriores. No se redondean datos existentes.
+`NumericInput` se usa en recipientes/peso de declaración y recepción. Recipientes: mínimo 1, entero e incremento 1. Peso: positivo e incremento 0.1 kg, con máximo un decimal tanto declarado como recibido; valores incompatibles se rechazan sin redondear. `DepthInput` muestra las profundidades con dos decimales al salir del campo y permite editar la precisión original al enfocarlo: 5 se ve 5.00; 5.12345 se presenta 5.12 pero se almacena sin cambiar. Resúmenes, actas y etiquetas usan dos decimales para presentación.
 
 ### Cancelar y cerrar solicitudes
 
@@ -159,7 +197,7 @@ Cancelar impide edición, recepción, revisión, reenvío, OT, carga de nuevos P
 
 Cerrar corresponde solo a MANAGER: al menos un ensayo aprobado COMPLETED, ninguna muestra sin ensayos, ninguna revisión/trabajo aceptado pendiente e informe disponible. Rechazos resueltos y ensayos cancelados no bloquean por sí solos el cierre, pero todos cancelados sin completados no permiten cerrar. Una solicitud cerrada no se puede cancelar. Los cierres históricos se conservan.
 
-SQL 6→7 añade únicamente `estado_general` (text, NOT NULL, default CREATED, CHECK de tres valores). CLOSED interno se convierte en CLOSED general y REJECTED global anterior en CANCELLED; sus ensayos abiertos no rechazados se cancelan con auditoría de migración. No se modifican fechas, decisiones, archivos ni resultados completados. Los demás quedan CREATED. No se añaden tablas, servicios ni variables Azure.
+Antecedente de migración: SQL 6→7 añade únicamente `estado_general` (text, NOT NULL, default CREATED, CHECK de tres valores). CLOSED interno se convierte en CLOSED general y REJECTED global anterior en CANCELLED; sus ensayos abiertos no rechazados se cancelan con auditoría de migración. No se modifican fechas, decisiones, archivos ni resultados completados. Los demás quedan CREATED. No se añaden tablas, servicios ni variables Azure.
 
 ## Permisos y privacidad
 
@@ -199,7 +237,11 @@ npm test
 npm run build
 ```
 
-Las pruebas PostgreSQL requieren TEST_DATABASE_URL apuntando exclusivamente a una base ficticia admitida con esquema 7, por ejemplo lab_lc_v7_unit_test. E2E usa LAB_E2E_URL y LAB_E2E_PASSWORD privados y cuentas ficticias. No usar bases reales. Resultados y limitaciones: [docs/verification.md](docs/verification.md). Contrato: [docs/openapi.json](docs/openapi.json). ERD: [Mermaid](docs/database.mmd) y [SVG](docs/database.svg). Publicación y actualización de Azure: [docs/deployment.md](docs/deployment.md).
+Las pruebas PostgreSQL requieren TEST_DATABASE_URL apuntando exclusivamente a una base ficticia admitida con esquema 9, por ejemplo lab_lc_v9_unit_test. E2E usa LAB_E2E_URL y LAB_E2E_PASSWORD privados y cuentas ficticias. No usar bases reales. Resultados y limitaciones: [docs/verification.md](docs/verification.md). Contrato: [docs/openapi.json](docs/openapi.json). ERD: [Mermaid](docs/database.mmd) y [SVG](docs/database.svg). Publicación y actualización de Azure: [docs/deployment.md](docs/deployment.md).
+
+`scripts/verify_schema9.py` verifica instalación limpia y migración8→9 sin pérdida de registros usando únicamente lab_lc_v9_clean_test y lab_lc_v9_migration_test, vacías y locales. Configurar TEST_CLEAN_DATABASE_URL y TEST_MIGRATION_DATABASE_URL privados. Comprueba columnas, todos los registros, correlativos, versión y triggers, y rechaza repetir la migración.
+
+`scripts/verify_schema8.py` conserva la comprobación histórica de instalación8 y reinicio7→8 usando su fixture de esquema8. Reproduce instalación y reinicio usando exclusivamente dos bases locales **vacías** creadas previamente: `lab_lc_v8_clean_test` y `lab_lc_v8_reset_test`. Configurar privadamente `TEST_CLEAN_DATABASE_URL` y `TEST_MIGRATION_DATABASE_URL` para esas bases y ejecutar con el entorno Python del backend. No acepta nombres operativos, servidores remotos ni bases ya pobladas; verifica cuentas, contraseñas, sesiones, correlativos, triggers y coherencia de columnas. No crea ni elimina bases. `scripts/verify_migration.py` corresponde solo al antecedente SQL05 (3→7).
 
 Git, VS Code App Service y Functions tienen exclusiones independientes. No publicar .env, local.settings.json, .local, PDF locales, cachés, entornos ni node_modules Windows; sí lockfiles y certificados públicos. El frontend publicado requiere dist más server.mjs y sus dependencias; npm run build no crea un ZIP ni agrega el proxy. Se mantienen las configuraciones de despliegue existentes. Esta actualización 6→7 solo necesita el nuevo bloque SQL y ambos paquetes; no cambia conexiones, permisos de infraestructura ni variables Azure.
 
@@ -274,8 +316,7 @@ Escala central: --text-brand = 11px; --text-tiny = 12px; --text-small = 13px; --
 | `.notice` | General | `--text-control` | 14px | [740](client/src/styles.css#L740) |
 | `.filter-bar > select` | General | `--text-control` | 14px | [763](client/src/styles.css#L763) |
 | `.pagination` | General | `--text-small` | 13px | [771](client/src/styles.css#L771) |
-| `.field > span,
- .field-label` | General | `--text-small` | 13px | [786](client/src/styles.css#L786) |
+| `.field > span, .field-label` | General | `--text-small` | 13px | [786](client/src/styles.css#L786) |
 | `.back-link` | General | `--text-small` | 13px | [818](client/src/styles.css#L818) |
 | `.steps button` | General | `--text-control` | 14px | [832](client/src/styles.css#L832) |
 | `.sample-editor header` | General | `--text-control` | 14px | [863](client/src/styles.css#L863) |
@@ -290,8 +331,7 @@ Escala central: --text-brand = 11px; --text-tiny = 12px; --text-small = 13px; --
 | `.check-label` | General | `--text-control` | 14px | [997](client/src/styles.css#L997) |
 | `.document-hero p` | General | `--text-control` | 14px | [1008](client/src/styles.css#L1008) |
 | `.document-row` | General | `--text-small` | 13px | [1024](client/src/styles.css#L1024) |
-| `.list-row,
- .issue` | General | `--text-control` | 14px | [1047](client/src/styles.css#L1047) |
+| `.list-row, .issue` | General | `--text-control` | 14px | [1047](client/src/styles.css#L1047) |
 | `.list-row p` | General | `--text-small` | 13px | [1052](client/src/styles.css#L1052) |
 | `.timeline-item` | General | `--text-control` | 14px | [1069](client/src/styles.css#L1069) |
 | `.activation h1` | General | `--text-title-small` | 27px | [1142](client/src/styles.css#L1142) |
@@ -326,6 +366,8 @@ Escala central: --text-brand = 11px; --text-tiny = 12px; --text-small = 13px; --
 | `.select-popover p` | General | `--text-small` | 13px | [2455](client/src/styles.css#L2455) |
 | `.work-hint` | General | `--text-small` | 13px | [2564](client/src/styles.css#L2564) |
 | `.numeric-buttons button` | General | `--text-control` | 14px | [2640](client/src/styles.css#L2640) |
+| `.economic-stats .stat-card strong` | General | `--text-title` | 32px | [2818](client/src/styles.css#L2818) |
+| `.income-months strong` | General | `--text-small` | 13px | [2830](client/src/styles.css#L2830) |
 
 Regenerar este inventario después de cambiar CSS: `node scripts/export_typography.mjs` (requiere las dependencias instaladas de client). Las fuentes del PDF son independientes: `api/services/documents.py`, función `render_labels`; no se cambian con el CSS web.
 <!-- TYPOGRAPHY:END -->
@@ -365,7 +407,7 @@ Identidad, contacto, empresa y roles de acceso; no existen asignaciones a proyec
 
 ### catalogo_ensayos
 
-Tipos de ensayo y referencias de método editables.
+Catálogo editable; precio vigente en USD para estimaciones económicas, sin registrar pagos.
 
 | Campo | Tipo | Obligatorio (NOT NULL) | Valor predeterminado SQL | Relación / clave | Función |
 |---|---|---|---|---|---|
@@ -374,6 +416,7 @@ Tipos de ensayo y referencias de método editables.
 | `nombre` | `text` | Sí | `Sin valor; debe suministrarse` | — | Nombre visible. |
 | `metodo` | `text` | Sí | `''::text` | — | Referencia del método, pendiente de validación por el laboratorio antes de usarla. |
 | `categoria` | `text` | Sí | `'Geotecnia'::text` | — | Grupo del ensayo para organizar el catálogo. |
+| `precio` | `numeric` | Sí | `Sin valor; debe suministrarse` | — | Precio vigente del ensayo en USD, obligatorio, finito, positivo y con máximo dos decimales; no es un precio histórico ni un pago. |
 | `activo` | `boolean` | Sí | `true` | — | Registro habilitado. En usuarios, false impide el acceso. |
 
 ### solicitudes
@@ -384,20 +427,18 @@ Solicitud del autor; empresa conservada y código externo de proyecto sin FK ent
 |---|---|---|---|---|---|
 | `id` | `uuid` | Sí | `gen_random_uuid()` | PK | Identificador interno del registro; no acredita acceso. |
 | `codigo` | `text` | Sí | `('SOL-'::text || lpad((nextval('numero_solicitud'::regclass))::text, 8, '0'::text))` | — | Correlativo visible SOL-00000001 generado por numero_solicitud. Los saltos de secuencia son normales. |
-| `proyecto_id` | `text` | Sí | `Sin valor; debe suministrarse` | — | Código de AppControlHH para solicitudes internas; EXTERNO para nuevas solicitudes externas. No es UUID ni FK. |
+| `proyecto_id` | `text` | No | `NULL` | — | Código AppControlHH o EXTERNO; NULL solo para borrador interno aún sin proyecto. Obligatorio al enviar una solicitud interna. Sin FK. |
 | `empresa_id` | `uuid` | Sí | `Sin valor; debe suministrarse` | empresas.id | Empresa conservada al crear la solicitud, independiente de cambios posteriores en el usuario. FK empresas.id. |
 | `creado_por` | `uuid` | Sí | `Sin valor; debe suministrarse` | usuarios.id | Usuario que creó la solicitud. |
 | `distrito` | `text` | No | `NULL` | — | Distrito de procedencia. Obligatorio en API al crear/editar; NULL permitido en registros históricos migrados. |
 | `provincia` | `text` | No | `NULL` | — | Provincia de procedencia. Obligatoria en API al crear/editar; NULL permitido en históricos. |
 | `departamento` | `text` | No | `NULL` | — | Departamento de procedencia. Obligatorio en API al crear/editar; NULL permitido en históricos. |
-| `coordenada_este` | `numeric` | No | `NULL` | — | Coordenada este opcional. NULL si se desconoce; no se convierte ni se presume sistema de referencia. |
-| `coordenada_norte` | `numeric` | No | `NULL` | — | Coordenada norte opcional. NULL si se desconoce; no se convierte ni se presume sistema de referencia. |
 | `codigo_ot` | `text` | No | `NULL` | — | OT manual normalizada en mayúsculas. Jefatura requiere al menos una muestra recibida para registrarla; correcciones con motivo. |
-| `titulo` | `text` | Sí | `Sin valor; debe suministrarse` | — | Nombre o propósito del servicio solicitado. |
 | `estado_solicitud` | `text` | Sí | `'DRAFT'::text` | — | Etapa interna de envío/revisión que conserva privacidad de borradores y permisos. No es el filtro visible Estado Solicitud. |
-| `estado_general` | `text` | Sí | `'CREATED'::text` | — | Estado general: CREATED (Creado), CANCELLED (Cancelado) o CLOSED (Cerrado). Independiente de la etapa interna y los conteos derivados. |
+| `estado_general` | `text` | Sí | `'CREATED'::text` | — | Estado general físico CREATED/CANCELLED/CLOSED. Si estado_solicitud=DRAFT, la interfaz y el filtro muestran Borrador; no se almacena un estado duplicado. |
 | `observaciones` | `text` | Sí | `''::text` | — | Observaciones del registro. |
-| `fecha_objetivo` | `date` | No | `NULL` | — | Fecha objetivo solicitada; no sustituye el fin previsto de cada ensayo. |
+| `fecha_objetivo` | `date` | No | `NULL` | — | Fecha objetivo de entrega de resultados, opcional; no sustituye el fin previsto de cada ensayo. |
+| `fecha_estimada_arribo` | `date` | No | `NULL` | — | Fecha estimada de llegada de las muestras; opcional e independiente de la fecha objetivo de resultados. |
 | `version` | `integer` | Sí | `1` | — | Contador de concurrencia del agregado: aumenta con cambios de muestras, ensayos, comentarios, informes o estado. |
 | `creado_en` | `timestamptz` | Sí | `now()` | — | Instante de creación, almacenado con zona horaria. |
 | `actualizado_en` | `timestamptz` | Sí | `now()` | — | Instante del último cambio de la solicitud o cualquiera de sus elementos. |
@@ -410,19 +451,21 @@ Una identidad de muestra desde la declaración hasta la recepción. Conserva la 
 |---|---|---|---|---|---|
 | `id` | `uuid` | Sí | `gen_random_uuid()` | PK | Identificador interno del registro; no acredita acceso. |
 | `solicitud_id` | `uuid` | Sí | `Sin valor; debe suministrarse` | solicitudes.id | Solicitud propietaria; determina el proyecto autorizado. |
-| `codigo_cliente` | `text` | Sí | `Sin valor; debe suministrarse` | — | Código de muestra declarado por el cliente, único dentro de la solicitud. |
+| `codigo_cliente` | `text` | No | `NULL` | — | Código declarado por el cliente, único por solicitud cuando está informado. NULL admite filas parciales de borrador; obligatorio antes del envío. |
 | `calicata_sondaje` | `text` | Sí | `''::text` | — | Calicata, sondaje o punto de extracción. |
-| `material` | `text` | Sí | `'Suelo'::text` | — | Descripción del material, por ejemplo suelo, relave o mezcla. |
-| `profundidad_inicial` | `numeric` | No | `NULL` | — | Profundidad inicial en metros; puede desconocerse. |
-| `profundidad_final` | `numeric` | No | `NULL` | — | Profundidad final en metros; no menor que la inicial. |
-| `cantidad` | `numeric` | No | `NULL` | — | Cantidad declarada de sacos enteros positivos; NULL significa desconocida. |
-| `peso` | `numeric` | No | `NULL` | — | Peso declarado en kg, positivo y opcional; separado de los sacos. |
+| `material` | `text` | No | `'Suelo'::text` | — | Tipo de muestra declarado. NULL solo en borradores incompletos; obligatorio antes del envío. El formulario no inventa un tipo. |
+| `coordenada_este` | `numeric` | No | `NULL` | — | Coordenada este opcional. NULL si se desconoce; no se convierte ni se presume sistema de referencia. |
+| `coordenada_norte` | `numeric` | No | `NULL` | — | Coordenada norte opcional. NULL si se desconoce; no se convierte ni se presume sistema de referencia. |
+| `profundidad_inicial` | `numeric` | No | `NULL` | — | Profundidad inicial en metros, opcional, no negativa; precisión almacenada conservada, visualización con dos decimales. |
+| `profundidad_final` | `numeric` | No | `NULL` | — | Profundidad final en metros, opcional y no menor que la inicial; precisión almacenada conservada, visualización con dos decimales. |
+| `cantidad` | `numeric` | No | `NULL` | — | Cantidad declarada de recipientes enteros positivos; NULL significa desconocida. |
+| `peso` | `numeric` | No | `NULL` | — | Peso declarado en kg, positivo, finito, opcional y con máximo un decimal; se rechaza precisión incompatible sin redondear. |
 | `observaciones` | `text` | Sí | `''::text` | — | Observaciones declaradas por el cliente; describe aquí los componentes de una mezcla. |
 | `recibido_en` | `timestamptz` | No | `NULL` | — | Fecha y hora efectivas de la última recepción; NULL si no llegó. |
 | `recibido_por` | `uuid` | No | `NULL` | usuarios.id | Persona del laboratorio que registró la recepción actual. |
 | `transporte` | `text` | Sí | `''::text` | — | Transporte, vehículo o persona que entregó la muestra. |
-| `cantidad_recibida` | `numeric` | No | `NULL` | — | Cantidad actual de sacos recibidos, enteros positivos y opcionales; no se acumula al corregir. |
-| `peso_recibido` | `numeric` | No | `NULL` | — | Peso real recibido en kg, positivo y opcional; permite comparar con el declarado. |
+| `cantidad_recibida` | `numeric` | No | `NULL` | — | Cantidad actual de recipientes recibidos, enteros positivos y opcionales; no se acumula al corregir. |
+| `peso_recibido` | `numeric` | No | `NULL` | — | Peso real recibido en kg, positivo, finito, opcional y con máximo un decimal; separado del declarado. |
 | `condicion` | `text` | Sí | `'NOT_RECEIVED'::text` | — | NOT_RECEIVED, OK, OBSERVED, DAMAGED o INSUFFICIENT. Solo OK permite iniciar, retomar y completar ensayos. |
 | `observaciones_recepcion` | `text` | Sí | `''::text` | — | Observación visible de recepción; obligatoria si la condición recibida no es OK. |
 | `codigo_recepcion` | `text` | No | `NULL` | — | Código manual normalizado en mayúsculas, compartido por muestras recibidas juntas; obligatorio al recibir. |
@@ -444,7 +487,7 @@ Una fila por pareja muestra–tipo de ensayo. Es la unidad contada en el dashboa
 | `fin_previsto` | `date` | No | `NULL` | — | Fecha prevista final, opcional; determina si el ensayo abierto está vencido. |
 | `iniciado_en` | `timestamptz` | No | `NULL` | — | Primer inicio real; se conserva al retomar un ensayo observado. |
 | `completado_en` | `timestamptz` | No | `NULL` | — | Instante de finalización real. |
-| `observaciones` | `text` | Sí | `''::text` | — | Último motivo o nota técnica interna. El historial conserva los cambios anteriores. |
+| `observaciones` | `text` | Sí | `''::text` | — | Último motivo o nota operativa. La API proyecta solo motivos de observar/cancelar al cliente desde actividad; otras notas internas siguen restringidas. |
 
 ### informes
 
@@ -501,11 +544,11 @@ Contador compartido entre instancias para los intentos de acceso.
 
 ### migraciones_esquema
 
-Versiones instaladas, independientes del nombre de la base. El esquema actual es 7.
+Versiones instaladas, independientes del nombre de la base. El esquema actual es 9.
 
 | Campo | Tipo | Obligatorio (NOT NULL) | Valor predeterminado SQL | Relación / clave | Función |
 |---|---|---|---|---|---|
-| `version` | `integer` | Sí | `Sin valor; debe suministrarse` | PK | Versión instalada, PK. Instalación limpia: 7; las migraciones conservan también las versiones previas. |
+| `version` | `integer` | Sí | `Sin valor; debe suministrarse` | PK | Versión instalada, PK. Instalación limpia: 9; las migraciones conservan también las versiones previas. |
 | `aplicado_en` | `timestamptz` | Sí | `now()` | — | Instante de instalación de la versión del esquema. |
 
 <!-- END FIELD DICTIONARY -->

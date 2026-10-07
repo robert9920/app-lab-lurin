@@ -1,4 +1,4 @@
--- Versión 9: instalar exclusivamente en una base NUEVA y vacía.
+-- Versión 8: instalar exclusivamente en una base NUEVA y vacía.
 BEGIN;
 CREATE TABLE migraciones_esquema (version integer PRIMARY KEY, aplicado_en timestamptz NOT NULL DEFAULT now());
 CREATE TABLE empresas (
@@ -21,7 +21,7 @@ CREATE SEQUENCE numero_solicitud;
 CREATE TABLE solicitudes (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  codigo text NOT NULL UNIQUE DEFAULT ('SOL-' || lpad(nextval('numero_solicitud')::text,8,'0')),
- proyecto_id text, empresa_id uuid NOT NULL REFERENCES empresas, creado_por uuid NOT NULL REFERENCES usuarios,
+ proyecto_id text NOT NULL, empresa_id uuid NOT NULL REFERENCES empresas, creado_por uuid NOT NULL REFERENCES usuarios,
  distrito text, provincia text, departamento text,
  codigo_ot text CHECK(codigo_ot IS NULL OR (codigo_ot=upper(trim(codigo_ot)) AND length(codigo_ot) BETWEEN 1 AND 60)),
  estado_solicitud text NOT NULL DEFAULT 'DRAFT'
@@ -33,7 +33,7 @@ CREATE TABLE solicitudes (
 );
 CREATE TABLE muestras (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), solicitud_id uuid NOT NULL REFERENCES solicitudes,
- codigo_cliente text, calicata_sondaje text NOT NULL DEFAULT '', material text DEFAULT 'Suelo',
+ codigo_cliente text NOT NULL, calicata_sondaje text NOT NULL DEFAULT '', material text NOT NULL DEFAULT 'Suelo',
  coordenada_este numeric CONSTRAINT muestras_este_valido CHECK(coordenada_este>=100000 AND coordenada_este<1000000),
  coordenada_norte numeric CONSTRAINT muestras_norte_valido CHECK(coordenada_norte>=1000000 AND coordenada_norte<10000000),
  profundidad_inicial numeric CHECK(profundidad_inicial>=0), profundidad_final numeric CHECK(profundidad_final>=0),
@@ -99,6 +99,6 @@ CREATE FUNCTION historial_inmutable() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN RAISE EXCEPTION 'El historial es inmutable'; END $$;
 CREATE TRIGGER actividad_inmutable BEFORE UPDATE OR DELETE ON actividad FOR EACH ROW EXECUTE FUNCTION historial_inmutable();
 CREATE TRIGGER informes_inmutables BEFORE UPDATE OR DELETE ON informes FOR EACH ROW EXECUTE FUNCTION historial_inmutable();
-INSERT INTO migraciones_esquema(version) VALUES(9);
+INSERT INTO migraciones_esquema(version) VALUES(8);
 COMMIT;
 

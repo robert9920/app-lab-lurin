@@ -180,7 +180,11 @@ export function RequestBadges({
     );
   return (
     <div className="status-stack assay-counts">
-      {includeRequest && <Badge state={request.request_status} />}
+      {includeRequest && (
+        <Badge
+          state={request.status === "DRAFT" ? "DRAFT" : request.request_status}
+        />
+      )}
       {assayStatuses.map(({ id }) => {
         const n = Number(request.assay_counts?.[id] || 0);
         return n > 0 ? (

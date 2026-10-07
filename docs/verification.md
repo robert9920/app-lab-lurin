@@ -1,4 +1,45 @@
-# Verificación · esquema 7
+# Verificación · esquema 9
+
+Comprobada el **7 de octubre de 2026**. Se utilizaron exclusivamente bases ficticias locales: `lab_lc_v9_unit_test`, `lab_lc_v9_clean_test`, `lab_lc_v9_migration_test` y las dos últimas con sufijo `_recheck`. No se modificaron `lab_lc_v3`, `lab_lc`, AppControlHH, configuraciones privadas ni recursos Azure.
+
+| Comprobación | Resultado verificado |
+|---|---|
+| Backend | **94 pruebas pytest aprobadas** sobre PostgreSQL, con rollback por prueba. Incluyen trece casos nuevos de borradores, envío, privacidad, motivos y alcance del técnico. Ruff sin errores. |
+| Borradores | Guardado sin muestras y con filas incompletas; filas vacías omitidas, códigos repetidos y valores introducidos inválidos rechazados. Borrador privado y filtro derivado de DRAFT. Cancelación bloqueada en servidor; envío y edición posterior exigen declaración completa. Se conserva control de versión. |
+| Motivos y privacidad | Observación/cancelación actuales e históricas visibles al cliente mediante una proyección limitada de actividad; muestra, ensayo, motivo, responsable y fecha. Otras notas internas siguen ocultas; el técnico solo recibe eventos de sus ensayos y muestras autorizados. |
+| Migración e instalación | SQL07 actualiza **8→9 sin pérdida de registros**, conservando correlativos, contraseñas y protecciones de historial/informes. Solo cambian tres restricciones NOT NULL. Once tablas; columnas y restricciones coinciden con instalación limpia9. Repetir SQL07 se rechaza. Reproducible con `scripts/verify_schema9.py` sobre bases locales vacías permitidas. |
+| Frontend | **17 pruebas Vitest aprobadas**, ESLint sin errores ni advertencias y build Vite correcto: **1839 módulos**. Búsquedas administrativas sin tildes ni diferencias de mayúsculas, filas parciales y etiquetas de borrador comprobadas. |
+| Navegador y revisión visual | `scripts/check_schema9_ui.mjs`, con respuestas HTTP ficticias y sin datos reales: Guardar borrador en los tres pasos, Borrador sin cancelación, comentarios por muestra e indicaciones junto a acciones, motivos visibles y búsqueda sin tildes. Revisión de escritorio y móvil; comentarios multilínea y acciones apiladas. Capturas en `.local/review-v9/`, excluidas de publicación. |
+| Documentación y contratos | README, AGENTS, deployment, OpenAPI9, diccionario de campos, Mermaid y SVG actualizados. ERD renderizado e inspeccionado. Los campos de motivos son proyecciones JSON, sin nuevas columnas. |
+| Publicación | `.gitignore`, `.funcignore` y exclusiones VS Code conservan fuentes y certificados públicos, excluyendo secretos, entornos, cachés, pruebas y PDF locales. Sin nuevas dependencias, variables ni servicios Azure. |
+
+Las restricciones iniciales del entorno para temporales de pytest y procesos auxiliares de Vite/Chrome se resolvieron con los permisos técnicos de ejecución. El primer verificador de migración encontró una limitación de codificación de consola después de las aserciones; se ajustó su salida y se repitió satisfactoriamente en bases ficticias nuevas. No hay bloqueo local pendiente.
+
+**Publicación pendiente:** sobre una base en esquema8, ejecutar **solo `sql/07_actualizacion_borradores.sql`**, con respaldo y la aplicación detenida; publicar `api` y `client` coordinadamente. **No repetir SQL06**, que reinicia datos. En Azure comprobar guardado/envío, privacidad del borrador y motivos con cuentas autorizadas. No se verificaron recursos Azure desplegados ni se ejecutó el conjunto histórico E2E contra una API real en esta actualización: el recorrido visual usa HTTP ficticio y las reglas backend se prueban en PostgreSQL. Las pruebas locales no certifican producción.
+
+## Antecedentes · esquema 8
+
+Comprobada el **7 de octubre de 2026**. Se trabajó únicamente en bases ficticias locales (`lab_lc_v8_unit_test`, `lab_lc_v8_migration_test`, `lab_lc_v8_clean_test` y `lab_lc_v8_reset_test`). No se modificaron lab_lc_v3, lab_lc, AppControlHH, archivos originales de Referencia, configuraciones privadas ni recursos Azure.
+
+| Comprobación | Resultado verificado |
+|---|---|
+| Catálogo oficial | **58 nombres y precios** comparados directamente con el XML del Excel original, hoja ID_Ensayos; SQL02 y SQL06 cargan LC-001…LC-058. Trabajo de Campo/Oficina excluidos, métodos por confirmar, activos y precios USD. |
+| Backend | **81 pruebas pytest aprobadas** en PostgreSQL con rollback por prueba. Incluye privacidad/borradores/técnicos, revisión individual/OT/recepción/informes/cancelación y pruebas nuevas de esquema8. |
+| Precio y administración | Edición por UUID cambia código sin añadir otra fila; código duplicado409. Precio positivo/finito/máximo2decimales; CLIENT/TECH sin precio ni permiso de modificación y MANAGER con lectura de precio. |
+| Economía | Agregación conciliada por tipo/empresa y mes con **125 ensayos completados adicionales**; suma exacta, cancelación conserva completados, excluye proyección y cambio de precio recalcula valor. Serie12meses; economía solo ADMIN/MANAGER. La suite operativa además comprueba conjuntos superiores a100solicitudes. |
+| Solicitudes y validación | Sin titulo en payload/respuesta/esquema; fecha_arribo opcional; coordenadas independientes por muestra, vacías válidas y formatos inválidos rechazados. Profundidad5.12345 preservada. Peso declarado/recibido rechaza negativos/cero/no finitos/más de1decimal; precisión de catálogo inválida rechazada. |
+| SQL06 y base limpia | Version8, once tablas y catálogo58. Reinicio elimina solo datos operativos, conserva usuario/empresa/hash de contraseña/sesión/auditoría administrativa/correlativo; triggers reactivados, borrado de auditoría bloqueado y segunda ejecución SQL06 rechazada. Columnas/tipos/null/default coinciden con instalación limpia. Verificador reproducible: scripts/verify_schema8.py, solo dos bases locales vacías permitidas. |
+| Frontend | **14 pruebas Vitest**, ESLint sin errores/advertencias y build Vite correcto, **1839 módulos**. Pruebas de búsqueda por nombre/código/método, categorías/activos, profundidad sin alterar valor, pegado de coordenadas, peso y filtros administrativos. |
+| Chrome sintético | Administración filtra58registros, edita código/precio por ID y limpia filtros. Formulario externo sin nombre/coordenadas de cabecera, fechas opcionales; pegado30muestras con coordenadas, añadir2ensayos a todas, confirmar payload sin título y profundidad original. Selector con categorías y nombre largo. Escritorio1560px y móvil390px, sin errores de React ni desbordamiento horizontal de página; las tablas/gráficos conservan su propio desplazamiento. scripts/check_schema8_ui.mjs reproduce la comprobación con HTTP ficticio, sin API/base reales. |
+| Revisión visual | Capturas de catálogo, fechas, matriz30, selector y economía en `.local/review-v8/`, inspeccionadas; diagrama SVG regenerado e inspeccionado. |
+| Contratos/documentación | OpenAPI8, Mermaid/SVG, diccionario completo de campos, inventario tipográfico, README, AGENTS y deployment actualizados. Ruff y formato de archivos Python correctos. |
+| Publicación | API: **29 archivos admitidos**, sin settings privados, entornos Windows, cachés, pruebas ni PDF; fuentes de economía y certificados públicos incluidos. Client conserva fuentes/build/servidor proxy/lockfile/PM2; dist sola no constituye su paquete. No se añadieron dependencias ni variables Azure. .gitignore/.funcignore y exclusiones VS Code continúan adecuadas. |
+
+Las ejecuciones inicialmente restringidas de esbuild/temporales se completaron con los permisos técnicos necesarios. Se corrigieron una consulta mensual SQL y expectativas de pruebas antiguas que aún buscaban títulos. La primera salida del verificador SQL encontró una limitación de codificación de consola después de pasar todas sus aserciones; su mensaje final se ajustó para Windows. Las esperas del verificador de navegador se adaptaron a la actualización de React.
+
+**Pendiente de publicación:** aplicar SQL06 explícitamente (reinicio autorizado) y publicar backend/frontend coordinadamente. Confirmar después en Azure login conservado, nuevo catálogo, precios/dashboard, solicitud/recepción/aprobación, PDFs y aislamiento real. No se verificaron servicios Azure desplegados ni se ejecutó el conjunto histórico E2E con una API real: el recorrido visual usa respuestas ficticias; las reglas backend se prueban sobre PostgreSQL. No ejecutar SQL06 automáticamente ni sobre una base que ya está en8. Las pruebas locales no certifican producción.
+
+## Antecedentes · esquema 7
 
 Ejecutada el **5 de octubre de 2026**. Solo se crearon y utilizaron las bases ficticias `lab_lc_v7_unit_test` y `lab_lc_v7_migration_test`; no se modificaron `lab_lc_v3`, `lab_lc`, AppControlHH, configuraciones privadas ni recursos Azure.
 

@@ -102,7 +102,7 @@ def render(data, kind):
             ),
             p("Transporte: " + (s["transport"] or "No indicado")),
             p(
-                "Sacos recibidos: "
+                "Recipientes recibidos: "
                 + str(s["received_quantity"] if s["received_quantity"] is not None else "No informada")
             ),
             p(

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Laboratorio Lara Consulting",
-    "version": "7.0.0",
+    "version": "9.0.0",
     "description": "Sesión opaca en cookie lab_session. Escrituras requieren Origin exacto y X-CSRF-Token de GET /session. ADMIN administra; MANAGER dirige; TECH solo consulta sus solicitudes, muestras y ensayos asignados; CLIENT accede solo a sus propias solicitudes. Borradores exclusivos de su autor. En Azure, la clave de Functions se agrega exclusivamente en el proxy. version identifica la revisión de la solicitud. Los lotes de /work son transaccionales. Cada informe se hace visible al confirmar la carga."
   },
   "servers": [
@@ -671,6 +671,85 @@
         }
       }
     },
+    "/management/catalog/{id}": {
+      "put": {
+        "operationId": "edit_catalog_put",
+        "summary": "edit catalog",
+        "responses": {
+          "200": {
+            "description": "Operación completada"
+          },
+          "400": {
+            "description": "Validación"
+          },
+          "401": {
+            "description": "Sesión inválida"
+          },
+          "403": {
+            "description": "Permiso insuficiente, origen o CSRF"
+          },
+          "404": {
+            "description": "Recurso fuera del ámbito autorizado o inexistente"
+          },
+          "409": {
+            "description": "Conflicto de versión, duplicado o estado"
+          },
+          "413": {
+            "description": "Tamaño máximo excedido"
+          },
+          "415": {
+            "description": "Tipo de contenido incorrecto"
+          },
+          "429": {
+            "description": "Demasiados intentos"
+          },
+          "500": {
+            "description": "Error interno sin detalles sensibles"
+          },
+          "503": {
+            "description": "Catálogo de proyectos no disponible"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Catalog"
+              }
+            }
+          }
+        },
+        "description": "ADMIN edita por UUID código, nombre, método, categoría, precio USD y disponibilidad. Cambiar el código conserva ID y relaciones; un código duplicado devuelve409."
+      }
+    },
     "/projects": {
       "get": {
         "operationId": "projects_get",
@@ -758,7 +837,66 @@
         "summary": "catalog",
         "responses": {
           "200": {
-            "description": "Operación completada"
+            "description": "Catálogo; precio solo para ADMIN/MANAGER",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "maxLength": 30,
+                        "minLength": 1,
+                        "title": "Code",
+                        "type": "string"
+                      },
+                      "name": {
+                        "maxLength": 200,
+                        "minLength": 3,
+                        "title": "Name",
+                        "type": "string"
+                      },
+                      "method": {
+                        "default": "",
+                        "maxLength": 200,
+                        "title": "Method",
+                        "type": "string"
+                      },
+                      "category": {
+                        "default": "Geotecnia",
+                        "maxLength": 100,
+                        "title": "Category",
+                        "type": "string"
+                      },
+                      "active": {
+                        "default": true,
+                        "title": "Active",
+                        "type": "boolean"
+                      },
+                      "price": {
+                        "anyOf": [
+                          {
+                            "exclusiveMinimum": 0.0,
+                            "type": "number"
+                          },
+                          {
+                            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                            "type": "string"
+                          }
+                        ],
+                        "title": "Price",
+                        "description": "Precio vigente en USD, obligatorio, positivo, finito y máximo dos decimales."
+                      },
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Validación"
@@ -791,7 +929,8 @@
             "description": "Catálogo de proyectos no disponible"
           }
         },
-        "parameters": []
+        "parameters": [],
+        "description": "Metadatos de todos los ensayos autorizados. Selección solo de activos; los deshabilitados permiten mostrar selecciones históricas. price se devuelve únicamente a ADMIN/MANAGER."
       }
     },
     "/technicians": {
@@ -945,6 +1084,20 @@
                           "unapproved_count": {
                             "type": "integer",
                             "description": "Ensayos accesibles que necesitan aprobación de jefatura."
+                          },
+                          "target_date": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date"
+                          },
+                          "estimated_arrival_date": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date"
                           }
                         }
                       }
@@ -1000,7 +1153,8 @@
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Código de solicitud o proyecto; coincidencia parcial sin distinguir mayúsculas. No existe título de solicitud."
           },
           {
             "name": "status",
@@ -1016,7 +1170,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "CSV OR: CREATED, CANCELLED, CLOSED; independiente de etapas internas. Otros filtros AND."
+            "description": "CSV OR: DRAFT, CREATED, CANCELLED, CLOSED. DRAFT deriva de estado_solicitud y solo es accesible por su autor; CREATED excluye borradores. El JSON request_status conserva el valor físico CREATED/CANCELLED/CLOSED. Otros filtros AND."
           },
           {
             "name": "assay_status",
@@ -1182,11 +1336,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RequestCreate"
+                "$ref": "#/components/schemas/DraftCreate"
               }
             }
           }
-        }
+        },
+        "description": "CLIENT crea un borrador privado parcial. Solo se omiten filas totalmente vacías; se validan valores informados y códigos repetidos. Para enviar usar actions submit con declaración completa."
       }
     },
     "/requests/{rid}": {
@@ -1202,8 +1357,11 @@
                   "type": "object",
                   "properties": {
                     "project_id": {
-                      "type": "string",
-                      "description": "Código de catálogo o EXTERNO; no UUID/FK."
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Código de catálogo o EXTERNO; no UUID/FK. NULL solo en borrador interno incompleto."
                     },
                     "status": {
                       "enum": [
@@ -1251,21 +1409,21 @@
                         "null"
                       ]
                     },
-                    "easting": {
+                    "target_date": {
                       "type": [
                         "string",
-                        "number",
                         "null"
                       ],
-                      "description": "Opcional e independiente; formato este seis dígitos enteros y norte siete; ambos admiten decimales. Históricos sin cambios se conservan."
+                      "format": "date",
+                      "description": "Fecha objetivo entrega resultados."
                     },
-                    "northing": {
+                    "estimated_arrival_date": {
                       "type": [
                         "string",
-                        "number",
                         "null"
                       ],
-                      "description": "Opcional e independiente; formato este seis dígitos enteros y norte siete; ambos admiten decimales. Históricos sin cambios se conservan."
+                      "format": "date",
+                      "description": "Fecha estimada arribo muestra."
                     },
                     "codigo_ot": {
                       "type": [
@@ -1456,11 +1614,19 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RequestEdit"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DraftEdit"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RequestEdit"
+                  }
+                ]
               }
             }
           }
-        }
+        },
+        "description": "DRAFT usa DraftEdit parcial; las solicitudes enviadas exigen RequestEdit completo. La API decide desde el estado almacenado y comprueba versión/autor; no hay bandera de relajación elegible por cliente."
       }
     },
     "/requests/{rid}/actions": {
@@ -1539,7 +1705,7 @@
             }
           }
         },
-        "description": "Las acciones legacy approve y reject devuelven 409. Usar /assays/review o cancel con motivo. Cancelación por autor CLIENT o MANAGER: versión, transacción, conserva completados/rechazados e informes. close exige MANAGER, al menos un completado, muestras definidas, trabajo resuelto e informe. Canceladas/cerradas sin escrituras."
+        "description": "Las acciones legacy approve y reject devuelven 409. Usar /assays/review o cancel con motivo. submit exige declaración completa (incluidas muestras), admitiendo muestras sin ensayos. Un DRAFT no puede cancelarse. Cancelación por autor CLIENT o MANAGER: versión, transacción, conserva completados/rechazados e informes. close exige MANAGER, al menos un completado, muestras definidas, trabajo resuelto e informe. Canceladas/cerradas sin escrituras."
       }
     },
     "/requests/{rid}/receptions": {
@@ -1852,7 +2018,8 @@
             "in": "query",
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "Código de solicitud; coincidencia parcial sin distinguir mayúsculas."
           },
           {
             "name": "requester",
@@ -1905,7 +2072,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "CSV OR: CREATED, CANCELLED, CLOSED; independiente de etapas internas. Otros filtros AND."
+            "description": "CSV OR: DRAFT, CREATED, CANCELLED, CLOSED. DRAFT deriva de estado_solicitud y solo es accesible por su autor; CREATED excluye borradores. El JSON request_status conserva el valor físico CREATED/CANCELLED/CLOSED. Otros filtros AND."
           },
           {
             "name": "assay_status",
@@ -2017,7 +2184,23 @@
         "summary": "dashboard",
         "responses": {
           "200": {
-            "description": "Operación completada"
+            "description": "Operación completada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "totals": {
+                      "type": "object"
+                    },
+                    "economics": {
+                      "$ref": "#/components/schemas/EconomicSummary"
+                    }
+                  },
+                  "description": "economics se omite para TECH."
+                }
+              }
+            }
           },
           "400": {
             "description": "Validación"
@@ -2050,7 +2233,8 @@
             "description": "Catálogo de proyectos no disponible"
           }
         },
-        "parameters": []
+        "parameters": [],
+        "description": "Agregaciones PostgreSQL completas por alcance. economics exclusivamente ADMIN/MANAGER: valor estimado de completados (incluso con solicitud cancelada) y proyección aprobada abierta. Precio vigente, una valoración por muestra–ensayo, fechas de Lima; no pagos ni utilidad neta. TECH conserva únicamente carga propia."
       }
     },
     "/requests/{rid}/work-order": {
@@ -2664,7 +2848,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Coincidencia parcial sin distinguir mayúsculas en código o título de solicitud. No busca proyecto ni nombre de archivo; project es un filtro independiente combinado con AND."
+            "description": "Coincidencia parcial sin distinguir mayúsculas únicamente en código de solicitud. No busca proyecto ni nombre de archivo; project es un filtro independiente combinado con AND."
           },
           {
             "name": "project",
@@ -2995,6 +3179,23 @@
             "type": "string",
             "description": "Motivo público de la última decisión; historial de revisiones preservado."
           },
+          "state_reason": {
+            "type": "string",
+            "description": "Motivo público de observación/cancelación actual; proyectado de actividad, incluidos eventos anteriores internos."
+          },
+          "state_reason_author": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state_reason_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
           "can_review": {
             "type": "boolean"
           },
@@ -3082,7 +3283,7 @@
               "number",
               "null"
             ],
-            "description": "Sacos declarados, entero positivo o desconocido."
+            "description": "Recipientes declarados, entero positivo o desconocido."
           },
           "weight": {
             "type": [
@@ -3090,7 +3291,7 @@
               "number",
               "null"
             ],
-            "description": "Peso declarado en kg o desconocido; independiente de sacos."
+            "description": "Kilogramos opcionales, positivos y finitos, máximo un decimal. Se rechaza precisión incompatible sin redondeo."
           },
           "received_quantity": {
             "type": [
@@ -3105,7 +3306,7 @@
               "number",
               "null"
             ],
-            "description": "Peso recibido en kg."
+            "description": "Kilogramos opcionales, positivos y finitos, máximo un decimal. Se rechaza precisión incompatible sin redondeo."
           },
           "can_receive": {
             "type": "boolean",
@@ -3114,8 +3315,272 @@
           "can_print": {
             "type": "boolean",
             "description": "Permiso para imprimir muestras autorizadas, también en solicitudes canceladas o cerradas. No habilita escrituras."
+          },
+          "easting": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Coordenada de esta muestra, opcional e independiente. Finita entre 100000 inclusive y 1000000 exclusivo, decimales admitidos. Validación de formato, no de ubicación."
+          },
+          "northing": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Coordenada de esta muestra, opcional e independiente. Finita entre 1000000 inclusive y 10000000 exclusivo, decimales admitidos. Validación de formato, no de ubicación."
+          },
+          "depth_from": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Metros; presentación con dos decimales sin modificar la precisión almacenada."
+          },
+          "depth_to": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Metros; presentación con dos decimales sin modificar la precisión almacenada."
           }
         }
+      },
+      "Sample": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Id"
+          },
+          "client_code": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Client Code",
+            "type": "string"
+          },
+          "borehole": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Borehole",
+            "type": "string"
+          },
+          "material": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Material",
+            "type": "string"
+          },
+          "depth_from": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Depth From",
+            "description": "Metros; presentación con dos decimales sin modificar la precisión almacenada."
+          },
+          "depth_to": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Depth To",
+            "description": "Metros; presentación con dos decimales sin modificar la precisión almacenada."
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Quantity"
+          },
+          "weight": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,1}0*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Weight",
+            "description": "Kilogramos opcionales, positivos y finitos, máximo un decimal. Se rechaza precisión incompatible sin redondeo."
+          },
+          "easting": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Coordenada de esta muestra, opcional e independiente. Finita entre 100000 inclusive y 1000000 exclusivo, decimales admitidos. Validación de formato, no de ubicación."
+          },
+          "northing": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ],
+            "description": "Coordenada de esta muestra, opcional e independiente. Finita entre 1000000 inclusive y 10000000 exclusivo, decimales admitidos. Validación de formato, no de ubicación."
+          },
+          "notes": {
+            "default": "",
+            "maxLength": 3000,
+            "title": "Notes",
+            "type": "string"
+          },
+          "assay_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 40,
+            "title": "Assay Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "client_code",
+          "material"
+        ],
+        "title": "Sample",
+        "type": "object"
+      },
+      "RequestEdit": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "exclusiveMinimum": 0,
+            "title": "Version",
+            "type": "integer"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Project Id"
+          },
+          "notes": {
+            "default": "",
+            "maxLength": 5000,
+            "title": "Notes",
+            "type": "string"
+          },
+          "target_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Target Date"
+          },
+          "estimated_arrival_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Estimated Arrival Date"
+          },
+          "district": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "District",
+            "type": "string"
+          },
+          "province": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Province",
+            "type": "string"
+          },
+          "department": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Department",
+            "type": "string"
+          },
+          "samples": {
+            "items": {
+              "$ref": "#/components/schemas/Sample"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Samples",
+            "type": "array"
+          }
+        },
+        "required": [
+          "version",
+          "district",
+          "province",
+          "department",
+          "samples"
+        ],
+        "title": "RequestEdit",
+        "type": "object"
       },
       "Login": {
         "additionalProperties": false,
@@ -3386,6 +3851,20 @@
             "title": "Category",
             "type": "string"
           },
+          "price": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,2}0*$",
+                "type": "string"
+              }
+            ],
+            "title": "Price",
+            "description": "Precio vigente en USD, obligatorio, positivo, finito y máximo dos decimales."
+          },
           "active": {
             "default": true,
             "title": "Active",
@@ -3394,12 +3873,13 @@
         },
         "required": [
           "code",
-          "name"
+          "name",
+          "price"
         ],
         "title": "Catalog",
         "type": "object"
       },
-      "Sample": {
+      "DraftSample": {
         "additionalProperties": false,
         "properties": {
           "id": {
@@ -3416,10 +3896,17 @@
             "title": "Id"
           },
           "client_code": {
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Client Code",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Client Code"
           },
           "borehole": {
             "default": "",
@@ -3428,10 +3915,17 @@
             "type": "string"
           },
           "material": {
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Material",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Material"
           },
           "depth_from": {
             "anyOf": [
@@ -3487,7 +3981,7 @@
                 "type": "number"
               },
               {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,1}0*$",
                 "type": "string"
               },
               {
@@ -3496,6 +3990,38 @@
             ],
             "default": null,
             "title": "Weight"
+          },
+          "easting": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Easting"
+          },
+          "northing": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Northing"
           },
           "notes": {
             "default": "",
@@ -3513,14 +4039,10 @@
             "type": "array"
           }
         },
-        "required": [
-          "client_code",
-          "material"
-        ],
-        "title": "Sample",
+        "title": "DraftSample",
         "type": "object"
       },
-      "RequestCreate": {
+      "DraftCreate": {
         "additionalProperties": false,
         "properties": {
           "project_id": {
@@ -3536,12 +4058,6 @@
             ],
             "default": null,
             "title": "Project Id"
-          },
-          "title": {
-            "maxLength": 180,
-            "minLength": 3,
-            "title": "Title",
-            "type": "string"
           },
           "notes": {
             "default": "",
@@ -3562,31 +4078,52 @@
             "default": null,
             "title": "Target Date"
           },
+          "estimated_arrival_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Estimated Arrival Date"
+          },
           "district": {
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "District",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "District"
           },
           "province": {
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Province",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Province"
           },
           "department": {
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Department",
-            "type": "string"
-          },
-          "easting": {
             "anyOf": [
               {
-                "type": "number"
-              },
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "maxLength": 100,
+                "minLength": 1,
                 "type": "string"
               },
               {
@@ -3594,47 +4131,21 @@
               }
             ],
             "default": null,
-            "title": "Easting",
-            "description": "Opcional. Valor finito entre 100000 inclusive y 1000000 exclusivo; decimales admitidos. En edición, históricos sin cambios se conservan."
-          },
-          "northing": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Northing",
-            "description": "Opcional. Valor finito entre 1000000 inclusive y 10000000 exclusivo; decimales admitidos. En edición, históricos sin cambios se conservan."
+            "title": "Department"
           },
           "samples": {
             "items": {
-              "$ref": "#/components/schemas/Sample"
+              "$ref": "#/components/schemas/DraftSample"
             },
             "maxItems": 200,
-            "minItems": 1,
             "title": "Samples",
             "type": "array"
           }
         },
-        "required": [
-          "title",
-          "district",
-          "province",
-          "department",
-          "samples"
-        ],
-        "title": "RequestCreate",
+        "title": "DraftCreate",
         "type": "object"
       },
-      "RequestEdit": {
+      "DraftEdit": {
         "additionalProperties": false,
         "properties": {
           "version": {
@@ -3656,12 +4167,6 @@
             "default": null,
             "title": "Project Id"
           },
-          "title": {
-            "maxLength": 180,
-            "minLength": 3,
-            "title": "Title",
-            "type": "string"
-          },
           "notes": {
             "default": "",
             "maxLength": 5000,
@@ -3681,31 +4186,52 @@
             "default": null,
             "title": "Target Date"
           },
+          "estimated_arrival_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Estimated Arrival Date"
+          },
           "district": {
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "District",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "District"
           },
           "province": {
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Province",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Province"
           },
           "department": {
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Department",
-            "type": "string"
-          },
-          "easting": {
             "anyOf": [
               {
-                "type": "number"
-              },
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "maxLength": 100,
+                "minLength": 1,
                 "type": "string"
               },
               {
@@ -3713,45 +4239,21 @@
               }
             ],
             "default": null,
-            "title": "Easting",
-            "description": "Opcional. Valor finito entre 100000 inclusive y 1000000 exclusivo; decimales admitidos. En edición, históricos sin cambios se conservan."
-          },
-          "northing": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Northing",
-            "description": "Opcional. Valor finito entre 1000000 inclusive y 10000000 exclusivo; decimales admitidos. En edición, históricos sin cambios se conservan."
+            "title": "Department"
           },
           "samples": {
             "items": {
-              "$ref": "#/components/schemas/Sample"
+              "$ref": "#/components/schemas/DraftSample"
             },
             "maxItems": 200,
-            "minItems": 1,
             "title": "Samples",
             "type": "array"
           }
         },
         "required": [
-          "version",
-          "title",
-          "district",
-          "province",
-          "department",
-          "samples"
+          "version"
         ],
-        "title": "RequestEdit",
+        "title": "DraftEdit",
         "type": "object"
       },
       "Action": {
@@ -3839,7 +4341,7 @@
                 "type": "number"
               },
               {
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d{0,1}0*$",
                 "type": "string"
               },
               {
@@ -3847,7 +4349,8 @@
               }
             ],
             "default": null,
-            "title": "Received Weight"
+            "title": "Received Weight",
+            "description": "Kilogramos opcionales, positivos y finitos, máximo un decimal. Se rechaza precisión incompatible sin redondeo."
           },
           "reception_notes": {
             "default": "",
@@ -4285,6 +4788,108 @@
         ],
         "title": "AssaysResubmit",
         "type": "object"
+      },
+      "EconomicSummary": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "const": "USD"
+          },
+          "price_basis": {
+            "const": "current_catalog"
+          },
+          "totals": {
+            "type": "object",
+            "properties": {
+              "completed_total": {
+                "type": [
+                  "string",
+                  "number"
+                ],
+                "description": "Importe exacto en USD, serializado como decimal."
+              },
+              "completed_month": {
+                "type": [
+                  "string",
+                  "number"
+                ],
+                "description": "Importe exacto en USD, serializado como decimal."
+              },
+              "projected_total": {
+                "type": [
+                  "string",
+                  "number"
+                ],
+                "description": "Importe exacto en USD, serializado como decimal."
+              }
+            }
+          },
+          "monthly": {
+            "type": "array",
+            "minItems": 12,
+            "maxItems": 12,
+            "items": {
+              "type": "object",
+              "properties": {
+                "month": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "amount": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "Importe exacto en USD, serializado como decimal."
+                }
+              }
+            }
+          },
+          "by_type": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "amount": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "Importe exacto en USD, serializado como decimal."
+                }
+              }
+            }
+          },
+          "by_organization": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "amount": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "Importe exacto en USD, serializado como decimal."
+                }
+              }
+            }
+          }
+        }
       }
     }
   },

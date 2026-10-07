@@ -38,6 +38,12 @@ def main():
             "lab_lc_v6_unit_test",
             "lab_lc_v7_test",
             "lab_lc_v7_unit_test",
+            "lab_lc_v8_unit_test",
+            "lab_lc_v8_migration_test",
+            "lab_lc_v8_clean_test",
+            "lab_lc_v9_unit_test",
+            "lab_lc_v9_migration_test",
+            "lab_lc_v9_clean_test",
         ):
             raise SystemExit(
                 "Este instalador solo admite lab_lc, lab_lc_v3 o una base ficticia de pruebas prevista."
@@ -59,20 +65,11 @@ def main():
                 conn.execute((sql_dir / "01_schema.sql").read_text(encoding="utf-8"))
             else:
                 version = conn.execute("SELECT max(version) FROM migraciones_esquema").fetchone()[0]
-                if version == 3 and args.command == "migrate":
-                    conn.execute((sql_dir / "05_actualizacion_solicitudes.sql").read_text(encoding="utf-8"))
-                elif version == 4 and args.command == "migrate":
-                    migration = (sql_dir / "05_actualizacion_solicitudes.sql").read_text(encoding="utf-8")
-                    conn.execute(migration.split("-- SECCION_ESQUEMA_5", 1)[1])
-                elif version == 5 and args.command == "migrate":
-                    migration = (sql_dir / "05_actualizacion_solicitudes.sql").read_text(encoding="utf-8")
-                    conn.execute(migration.split("-- SECCION_ESQUEMA_6", 1)[1])
-                elif version == 6 and args.command == "migrate":
-                    migration = (sql_dir / "05_actualizacion_solicitudes.sql").read_text(encoding="utf-8")
-                    conn.execute(migration.split("-- SECCION_ESQUEMA_7", 1)[1])
-                elif version != 7:
+                if version != 9:
                     raise SystemExit(
-                        "Versión incompatible; migrate actualiza esquema 3/4/5/6 a 7. Detén los servidores y respalda antes."
+                        "Se requiere esquema 9. En versión 8 ejecuta SQL07 (conserva datos). En versión 7 ejecuta explícitamente SQL06: elimina datos operativos. "
+                        "En versiones 3–6 aplica primero las secciones correspondientes de SQL05 hasta 7. "
+                        "Respalda y detén los servidores. migrate NO ejecuta el reinicio."
                     )
             conn.execute(
                 (sql_dir / ("03_demo.sql" if args.command == "demo" else "02_catalog.sql")).read_text(
@@ -82,7 +79,7 @@ def main():
         print(
             "Datos ficticios preparados; inicializa las contraseñas con password."
             if args.command == "demo"
-            else "Esquema 7 y catálogo preparados."
+            else "Esquema 9 y catálogo preparados."
         )
         return
     from pydantic import EmailStr, TypeAdapter

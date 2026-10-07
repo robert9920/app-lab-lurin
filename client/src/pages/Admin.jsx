@@ -2,6 +2,10 @@ import useErrorNotice from "../hooks/useErrorNotice";
 import { useEffect, useState, useCallback } from "react";
 import { Plus, Users, Building2, TestTubes } from "lucide-react";
 import { api, messageOf } from "../services/api";
+import { useSearchParams } from "react-router-dom";
+import SearchSelect from "../components/SearchSelect";
+import { filterAdminRows } from "../services/admin";
+import { formatMoney } from "../services/assaySelection";
 import {
   PageHead,
   Loading,
@@ -13,8 +17,12 @@ import {
   labels,
 } from "../components/ui";
 export default function Admin() {
+  const [params, setParams] = useSearchParams();
+  const tab = ["users", "organizations", "catalog"].includes(params.get("tab"))
+    ? params.get("tab")
+    : "users";
+  const [filterEpoch, setFilterEpoch] = useState(0);
   const [data, setData] = useState(null),
-    [tab, setTab] = useState("users"),
     [modal, setModal] = useState(""),
     [form, setForm] = useState({}),
     [error, setError] = useErrorNotice(),
@@ -55,6 +63,7 @@ export default function Admin() {
                 name: "",
                 method: "",
                 category: "Geotecnia",
+                price: "",
                 active: true,
                 ...item,
               },
@@ -88,13 +97,13 @@ export default function Admin() {
               ]
             : modal === "organizations"
               ? ["name", "tax_id", "active", "is_internal"]
-              : ["code", "name", "method", "category", "active"];
+              : ["code", "name", "method", "category", "price", "active"];
         payload = Object.fromEntries(keys.map((k) => [k, form[k]]));
         if (modal === "users") {
           payload.organization_id ||= null;
           payload.phone ||= null;
         }
-        const editing = !!form.id && modal !== "catalog";
+        const editing = !!form.id;
         await api[editing ? "put" : "post"](
           `/management/${modal}${editing ? "/" + form.id : ""}`,
           payload,
@@ -134,6 +143,12 @@ export default function Admin() {
         )}
       </>
     );
+  const filtered = filterAdminRows(data[tab], Object.fromEntries(params), tab);
+  function filter(key, value) {
+    const next = new URLSearchParams(params);
+    value ? next.set(key, value) : next.delete(key);
+    setParams(next, { replace: true });
+  }
   return (
     <>
       <PageHead
@@ -156,78 +171,172 @@ export default function Admin() {
           <button
             key={k}
             className={tab === k ? "active" : ""}
-            onClick={() => setTab(k)}
+            onClick={() => {
+              setParams({ tab: k }, { replace: true });
+              setFilterEpoch((n) => n + 1);
+            }}
           >
             <Icon size={16} />
             {l}
           </button>
         ))}
       </div>
-      <section className="card admin-table">
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>
-                  {tab === "users"
-                    ? "Correo / teléfono / empresa"
-                    : tab === "catalog"
-                      ? "Método"
-                      : "Identificación tributaria"}
-                </th>
-                <th>Permisos / clasificación</th>
-                <th>Estado</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {data[tab].map((x) => (
-                <tr key={x.id}>
-                  <td>
-                    <b>{x.name}</b>
-                  </td>
-                  <td>
-                    {x.email || x.method || x.tax_id || "—"}
-                    {x.phone && <small className="block">{x.phone}</small>}
-                    {tab === "users" && (
-                      <small className="block">
-                        {data.organizations.find(
-                          (o) => o.id === x.organization_id,
-                        )?.name || "Sin empresa"}
-                      </small>
-                    )}
-                  </td>
-                  <td>
-                    {x.roles
-                      ? x.roles.map((r) => labels[r]).join(" · ")
-                      : tab === "organizations"
-                        ? x.is_internal
-                          ? "Empresa interna"
-                          : "Empresa externa"
-                        : x.category}
-                  </td>
-                  <td>
-                    <Badge state={x.active ? "OK" : "CANCELLED"}>
-                      {x.active ? "Habilitado" : "Deshabilitado"}
-                    </Badge>
-                  </td>
-                  <td>
-                    <div className="actions">
-                      <Button onClick={() => open(tab, x)}>Editar</Button>
-                      {tab === "users" && (
-                        <Button onClick={() => open("password", { id: x.id })}>
-                          Restablecer contraseña
-                        </Button>
+      <div className="listing-layout">
+        <aside className="card form-card filters-panel">
+          <details open>
+            <summary>Filtros</summary>
+            <div className="filter-actions">
+              <Button
+                onClick={() => {
+                  setParams({ tab }, { replace: true });
+                  setFilterEpoch((n) => n + 1);
+                }}
+              >
+                Borrar filtros
+              </Button>
+            </div>
+            <div className="form-grid" key={filterEpoch}>
+              <Field label="Buscar por nombre">
+                <input
+                  value={params.get("name") || ""}
+                  onChange={(e) => filter("name", e.target.value)}
+                  placeholder="Nombre"
+                />
+              </Field>
+              {tab === "users" && (
+                <>
+                  <Field label="Empresa">
+                    <SearchSelect
+                      value={params.get("organization") || ""}
+                      onChange={(v) => filter("organization", v)}
+                      options={data.organizations}
+                    />
+                  </Field>
+                  <Field label="Rol">
+                    <SearchSelect
+                      multiple
+                      value={params.get("role") || ""}
+                      onChange={(v) => filter("role", v)}
+                      options={["ADMIN", "MANAGER", "TECH", "CLIENT"].map(
+                        (id) => ({ id, name: labels[id] }),
                       )}
-                    </div>
-                  </td>
+                    />
+                  </Field>
+                </>
+              )}
+              {tab === "catalog" && (
+                <Field label="Categoría">
+                  <SearchSelect
+                    value={params.get("category") || ""}
+                    onChange={(v) => filter("category", v)}
+                    options={[...new Set(data.catalog.map((a) => a.category))]
+                      .sort()
+                      .map((name) => ({ id: name, name }))}
+                  />
+                </Field>
+              )}
+              <Field label="Estado">
+                <SearchSelect
+                  value={params.get("active") || ""}
+                  onChange={(v) => filter("active", v)}
+                  options={[
+                    { id: "true", name: "Habilitado" },
+                    { id: "false", name: "Deshabilitado" },
+                  ]}
+                />
+              </Field>
+            </div>
+          </details>
+        </aside>
+        <section className="card admin-table results-panel" aria-busy={loading}>
+          {loading && <Loading>Actualizando registros…</Loading>}
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>
+                    {tab === "users"
+                      ? "Correo / teléfono / empresa"
+                      : tab === "catalog"
+                        ? "Método"
+                        : "Identificación tributaria"}
+                  </th>
+                  <th>
+                    {tab === "users"
+                      ? "Permisos"
+                      : tab === "organizations"
+                        ? "Tipo Empresa"
+                        : "Categoría"}
+                  </th>
+                  {tab === "catalog" && <th>Precio (USD)</th>}
+                  <th>Estado</th>
+                  <th />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody>
+                {!filtered.length && (
+                  <tr>
+                    <td colSpan={tab === "catalog" ? 6 : 5}>
+                      No hay registros con estos filtros.
+                    </td>
+                  </tr>
+                )}
+                {filtered.map((x) => (
+                  <tr key={x.id}>
+                    <td>
+                      <b>{x.name}</b>
+                      {tab === "catalog" && (
+                        <small className="block">{x.code}</small>
+                      )}
+                    </td>
+                    <td>
+                      {x.email || x.method || x.tax_id || "—"}
+                      {x.phone && <small className="block">{x.phone}</small>}
+                      {tab === "users" && (
+                        <small className="block">
+                          {data.organizations.find(
+                            (o) => o.id === x.organization_id,
+                          )?.name || "Sin empresa"}
+                        </small>
+                      )}
+                    </td>
+                    <td>
+                      {x.roles
+                        ? x.roles.map((r) => labels[r]).join(" · ")
+                        : tab === "organizations"
+                          ? x.is_internal
+                            ? "Empresa interna"
+                            : "Empresa externa"
+                          : x.category}
+                    </td>
+                    {tab === "catalog" && (
+                      <td className="money-value">{formatMoney(x.price)}</td>
+                    )}
+                    <td>
+                      <Badge state={x.active ? "OK" : "CANCELLED"}>
+                        {x.active ? "Habilitado" : "Deshabilitado"}
+                      </Badge>
+                    </td>
+                    <td>
+                      <div className="actions">
+                        <Button onClick={() => open(tab, x)}>Editar</Button>
+                        {tab === "users" && (
+                          <Button
+                            onClick={() => open("password", { id: x.id })}
+                          >
+                            Restablecer contraseña
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
       {modal && (
         <Modal
           title={
@@ -332,6 +441,16 @@ export default function Admin() {
                 {field("code", "Código *", { required: true, max: 30 })}
                 {field("method", "Método (opcional)")}
                 {field("category", "Categoría *", { required: true, max: 100 })}
+                <Field label="Precio (USD) *">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    required
+                    value={form.price}
+                    onChange={(e) => change("price", e.target.value)}
+                  />
+                </Field>
               </>
             )}
             {(modal === "organizations" ||

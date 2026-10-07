@@ -13,7 +13,7 @@ from validation import Action, AssaysEdit, AssaysResubmit, AssaysReview, Request
 
 
 def submitted(db, users):
-    aid = one(db, "SELECT id FROM catalogo_ensayos WHERE codigo='HUM'")["id"]
+    aid = one(db, "SELECT id FROM catalogo_ensayos WHERE codigo='LC-001'")["id"]
     payload = declaration()
     for sample in payload["samples"]:
         sample["assay_ids"] = [aid]
@@ -264,10 +264,10 @@ def test_status_filters_include_approved_with_pending_and_missing_assays(db, use
     )
     headers = identity(db, users["jefe"])
     for status in ("SUBMITTED", "WAITING_ASSAYS", "APPROVED", "SUBMITTED,WAITING_ASSAYS"):
-        response = invoke("requests", headers=headers, params={"status": status, "q": "Muestras antes"})
+        response = invoke("requests", headers=headers, params={"status": status, "q": r["code"]})
         assert str(rid) in {x["id"] for x in json.loads(response.get_body())["items"]}
     assert invoke("requests", headers=headers, params={"status": "INVALID"}).status_code == 400
-    # Filters do not reveal a draft, even for an administrator with its exact title.
+    # Filters do not reveal a draft, even for an administrator.
     draft = w.create_request(db, users["cliente"], RequestCreate(**declaration()))["id"]
     response = invoke(
         "requests", headers=identity(db, users["admin"]), params={"status": "SUBMITTED,WAITING_ASSAYS,DRAFT"}

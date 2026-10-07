@@ -1,5 +1,34 @@
+-- ESQUEMA 7 → 8. REINICIO OPERATIVO EXPRESAMENTE SOLICITADO.
+-- Ejecutar UNA VEZ como propietario, con la aplicación detenida y respaldo previo.
+-- Borra solicitudes, muestras, ensayos, informes (metadatos), actividad asociada y catálogo.
+-- Conserva empresas, usuarios, contraseñas, sesiones, actividad administrativa y correlativos.
+-- Los PDF físicos NO se borran. Guardar antes SELECT clave_archivo FROM informes para limpieza separada.
+BEGIN;
+LOCK TABLE migraciones_esquema,solicitudes,muestras,ensayos_muestra,informes,actividad,catalogo_ensayos IN ACCESS EXCLUSIVE MODE;
+DO $$ BEGIN
+ IF (SELECT max(version) FROM migraciones_esquema) IS DISTINCT FROM 7 THEN
+  RAISE EXCEPTION 'SQL06 requiere esquema 7; no repetir ni ejecutar sobre otra versión';
+ END IF;
+END $$;
+ALTER TABLE actividad DISABLE TRIGGER actividad_inmutable;
+ALTER TABLE informes DISABLE TRIGGER informes_inmutables;
+DELETE FROM actividad WHERE solicitud_id IS NOT NULL;
+DELETE FROM informes;
+DELETE FROM ensayos_muestra;
+DELETE FROM muestras;
+DELETE FROM solicitudes;
+DELETE FROM catalogo_ensayos;
+ALTER TABLE actividad ENABLE TRIGGER actividad_inmutable;
+ALTER TABLE informes ENABLE TRIGGER informes_inmutables;
+ALTER TABLE catalogo_ensayos ADD COLUMN precio numeric NOT NULL
+ CONSTRAINT catalogo_precio_valido CHECK(precio>0 AND precio=round(precio,2) AND precio NOT IN ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric));
+ALTER TABLE solicitudes DROP COLUMN titulo, DROP COLUMN coordenada_este, DROP COLUMN coordenada_norte, ADD COLUMN fecha_estimada_arribo date;
+ALTER TABLE muestras ADD COLUMN coordenada_este numeric CONSTRAINT muestras_este_valido CHECK(coordenada_este>=100000 AND coordenada_este<1000000),
+ ADD COLUMN coordenada_norte numeric CONSTRAINT muestras_norte_valido CHECK(coordenada_norte>=1000000 AND coordenada_norte<10000000),
+ ADD CONSTRAINT muestras_peso_precision CHECK(peso=round(peso,1)),
+ ADD CONSTRAINT muestras_peso_recibido_precision CHECK(peso_recibido=round(peso_recibido,1));
 -- Catálogo oficial: Referencia/Ensayos_Laboratorio_Lurin.xlsx, ID_Ensayos A2:B59. Precios en USD.
--- Excluidos Trabajo de Campo y Trabajo de Oficina (sin precio). No cambia registros existentes.
+-- Excluidos Trabajo de Campo y Trabajo de Oficina (sin precio). Catálogo reemplazado por completo.
 INSERT INTO catalogo_ensayos(codigo,nombre,metodo,categoria,precio,activo) VALUES
 ('LC-001','Contenido de Humedad','Por confirmar con laboratorio','Caracterización',11,true),
 ('LC-002','Análisis Granulométrico por Tamizado < N° 3in.','Por confirmar con laboratorio','Caracterización',27,true),
@@ -60,3 +89,5 @@ INSERT INTO catalogo_ensayos(codigo,nombre,metodo,categoria,precio,activo) VALUE
 ('LC-057','Eliminación de Muestras por 30kg','Por confirmar con laboratorio','Manejo de muestras',30,true),
 ('LC-058','Limite de Contracción','Por confirmar con laboratorio','Caracterización',20,true)
 ON CONFLICT(codigo) DO NOTHING;
+INSERT INTO migraciones_esquema(version) VALUES(8);
+COMMIT;

@@ -22,8 +22,9 @@ from validation import (
     AssaysResubmit,
     AssaysReview,
     Comment,
+    DraftCreate,
+    DraftEdit,
     Reception,
-    RequestCreate,
     RequestEdit,
     TaskUpdate,
     WorkOrder,
@@ -73,7 +74,7 @@ def projects(db, req):
         raise AppError(400, "Filtro de proyectos inválido.")
     return rows(
         db,
-        "SELECT DISTINCT r.proyecto_id id,r.proyecto_id code,r.proyecto_id name FROM solicitudes r WHERE "
+        "SELECT DISTINCT r.proyecto_id id,r.proyecto_id code,r.proyecto_id name FROM solicitudes r WHERE r.proyecto_id IS NOT NULL AND "
         + SCOPE
         + " ORDER BY r.proyecto_id",
         **scope_params(u),
@@ -83,8 +84,9 @@ def projects(db, req):
 @bp.route(route="catalog", methods=["GET"])
 @endpoint
 def catalog(db, req):
-    session(db, req)
-    return rows(db, "SELECT * FROM catalogo_ensayos ORDER BY categoria,codigo")
+    u = session(db, req)
+    fields = "*" if set(u["roles"]) & {"ADMIN", "MANAGER"} else "id,codigo,nombre,metodo,categoria,activo"
+    return rows(db, "SELECT " + fields + " FROM catalogo_ensayos ORDER BY categoria,codigo")
 
 
 @bp.route(route="technicians", methods=["GET"])
@@ -104,7 +106,7 @@ def technicians(db, req):
 def requests(db, req):
     u = session(db, req)
     if req.method == "POST":
-        created = w.create_request(db, u, body(req, RequestCreate))
+        created = w.create_request(db, u, body(req, DraftCreate))
         return w.detail(db, u, created["id"])
     params = {
         **scope_params(u),
@@ -113,7 +115,7 @@ def requests(db, req):
     }
     where = (
         SCOPE
-        + " AND (:project='' OR r.proyecto_id::text=:project) AND (r.codigo ILIKE :q OR r.titulo ILIKE :q OR r.proyecto_id ILIKE :q)"
+        + " AND (:project='' OR r.proyecto_id::text=:project) AND (r.codigo ILIKE :q OR r.proyecto_id ILIKE :q)"
     )
     extra = []
     request_state_filter(req, extra, params)
@@ -184,7 +186,8 @@ def requests(db, req):
 def request_detail(db, req):
     u, rid = session(db, req), uid(req.route_params["rid"])
     if req.method == "PUT":
-        w.edit_request(db, u, rid, body(req, RequestEdit))
+        current = request_access(db, u, rid)
+        w.edit_request(db, u, rid, body(req, DraftEdit if current["status"] == "DRAFT" else RequestEdit))
     return w.detail(db, u, rid)
 
 
@@ -272,7 +275,7 @@ def work(db, req):
     assay_filter(req, where, params, work=True)
     metric = req.params.get("metric", "")
     if req.params.get("request_q"):
-        where.append("(r.codigo ILIKE :request_q OR r.titulo ILIKE :request_q)")
+        where.append("r.codigo ILIKE :request_q")
         params["request_q"] = "%" + req.params["request_q"][:150] + "%"
     if metric in ("open", "overdue", "unassigned", "undated", "upcoming"):
         where.append(OPEN)
@@ -309,6 +312,7 @@ def work(db, req):
         "a.fin_previsto NULLS LAST,r.codigo,s.codigo_cliente,c.nombre,a.id",
     )
     w.review_projection(db, [t for t in result["items"] if t["row_kind"] == "assay"])
+    w.state_reason_projection(db, [t for t in result["items"] if t["row_kind"] == "assay"])
     for task in result["items"]:
         task["assigned"] = task["technician_id"] is not None
         task["allowed_actions"] = (
@@ -348,7 +352,7 @@ def dashboard(db, req):
             + (" AND r.estado_solicitud='APPROVED'" if technical_only(u) else ""),
             **params,
         )["n"]
-    return {
+    result = {
         "personal": technical_only(u),
         "totals": totals,
         "by_type": rows(
@@ -387,6 +391,11 @@ def dashboard(db, req):
             **params,
         ),
     }
+    if set(u["roles"]) & {"ADMIN", "MANAGER"}:
+        from services.economics import summary
+
+        result["economics"] = summary(db)
+    return result
 
 
 @bp.route(route="requests/{rid}/work-order", methods=["POST"])

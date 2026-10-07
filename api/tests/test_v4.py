@@ -15,9 +15,8 @@ from validation import Action, Reception, RequestCreate, RequestEdit, TaskUpdate
 
 
 def declaration(**extra):
-    return {
+    result = {
         "project_id": "DEMO-001",
-        "title": "Muestras antes de definir ensayos",
         "district": "Lurín",
         "province": "Lima",
         "department": "Lima",
@@ -27,6 +26,10 @@ def declaration(**extra):
         ],
         **extra,
     }
+    for key in ("easting", "northing"):
+        if key in result:
+            result["samples"][0][key] = result.pop(key)
+    return result
 
 
 def current(db, user, rid):
@@ -39,7 +42,11 @@ def test_pending_receipt_edit_ot_approval_and_operational_gates(db, users):
     rid = w.create_request(db, client, RequestCreate(**payload))["id"]
     w.action(db, client, rid, Action(version=1, action="submit"))
     r = current(db, manager, rid)
-    assert r["status"] == "WAITING_ASSAYS" and r["easting"] is None and r["northing"] is None
+    assert (
+        r["status"] == "WAITING_ASSAYS"
+        and r["samples"][0]["easting"] is None
+        and r["samples"][0]["northing"] is None
+    )
     assert len(r["samples"]) == 2 and not r["tasks"]
     assert (
         invoke("request_detail", route={"rid": str(rid)}, headers=identity(db, users["tecnico"])).status_code
@@ -78,7 +85,7 @@ def test_pending_receipt_edit_ot_approval_and_operational_gates(db, users):
     samples = [{**s, "assay_ids": []} for s in payload["samples"]]
     samples[0]["id"] = sid
     samples[1]["id"] = r["samples"][1]["id"]
-    aid = one(db, "SELECT id FROM catalogo_ensayos WHERE codigo='HUM'")["id"]
+    aid = one(db, "SELECT id FROM catalogo_ensayos WHERE codigo='LC-001'")["id"]
     for s in samples:
         s["assay_ids"] = [aid]
     w.edit_request(db, client, rid, RequestEdit(**{**payload, "samples": samples, "version": r["version"]}))
@@ -166,8 +173,8 @@ def test_catalog_search_and_failure_does_not_break_existing_records(db, users, m
 
 
 def test_optional_coordinates_and_required_fields_and_sacks():
-    assert RequestCreate(**declaration()).easting is None
-    assert RequestCreate(**declaration(easting=0, northing=None)).easting == 0
+    assert RequestCreate(**declaration()).samples[0].easting is None
+    assert RequestCreate(**declaration(easting=0, northing=None)).samples[0].easting == 0
     for field in ("district", "province", "department"):
         with pytest.raises(ValidationError):
             RequestCreate(**declaration(**{field: ""}))
@@ -228,5 +235,5 @@ def test_manage_migrate_recognizes_current_schema_without_reinstall(db):
         capture_output=True,
     )
     assert result.returncode == 0, "migrate debe aceptar el esquema actual sin reinstalar"
-    assert one(db, "SELECT max(version) version FROM migraciones_esquema")["version"] == 7
+    assert one(db, "SELECT max(version) version FROM migraciones_esquema")["version"] == 9
     assert one(db, "SELECT count(*) n FROM solicitudes")["n"] == before

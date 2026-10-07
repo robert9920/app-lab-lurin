@@ -85,7 +85,7 @@ export default function ReportsPage() {
               <div className="form-grid" key={filterEpoch}>
                 <Field label="Buscar solicitud">
                   <input
-                    placeholder="Código o nombre de solicitud"
+                    placeholder="Código de solicitud"
                     value={params.get("q") || ""}
                     onChange={(e) => filter("q", e.target.value)}
                   />

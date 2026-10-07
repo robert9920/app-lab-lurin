@@ -13,9 +13,8 @@ from validation import Action, AssaysReview, Reception, RequestCreate, WorkOrder
 
 
 def received_request(db, users, conditions):
-    assay = one(db, "SELECT id FROM catalogo_ensayos WHERE codigo='HUM'")["id"]
+    assay = one(db, "SELECT id FROM catalogo_ensayos WHERE codigo='LC-001'")["id"]
     payload = declaration(
-        title="Caracterización de materiales",
         samples=[
             {"client_code": f"M-{i}", "material": "Suelo", "assay_ids": [assay]}
             for i in range(len(conditions))
@@ -92,7 +91,7 @@ def test_reception_counts_respect_each_technician_and_filters(db, users):
     execute(
         db,
         "INSERT INTO ensayos_muestra(muestra_id,ensayo_id,tecnico_id,estado_revision) "
-        "SELECT :s,id,:u,'APPROVED' FROM catalogo_ensayos WHERE codigo<>'HUM' LIMIT 1",
+        "SELECT :s,id,:u,'APPROVED' FROM catalogo_ensayos WHERE codigo<>'LC-001' LIMIT 1",
         s=request["samples"][0]["id"],
         u=users["tecnico"]["id"],
     )
@@ -140,7 +139,7 @@ def test_reception_conforming_without_ot_and_terminal_exclusion(db, users):
         )
 
 
-def test_reports_search_request_code_or_title_and_project_separately(db, users):
+def test_reports_search_request_code_and_project_separately(db, users):
     rid, request = received_request(db, users, ["OK"])
     execute(db, "UPDATE solicitudes SET proyecto_id='PROYECTO-UNICO-REPORTES' WHERE id=:id", id=rid)
     for version in (1, 2):
@@ -154,12 +153,17 @@ def test_reports_search_request_code_or_title_and_project_separately(db, users):
             u=users["jefe"]["id"],
         )
     for user in (users["admin"], users["jefe"], users["cliente"]):
-        for query in (request["code"].lower(), "MATERIALES", "caracterización"):
+        for query in (request["code"].lower(), request["code"][-5:]):
             listed = response(db, user, "reports", q=query)
             assert listed["total"] == 2
             assert {x["version"] for x in listed["items"]} == {1, 2}
         assert response(db, user, "reports", q="proyecto-unico-reportes")["total"] == 0
-        assert response(db, user, "reports", project="PROYECTO-UNICO-REPORTES", q="materiales")["total"] == 2
+        assert (
+            response(db, user, "reports", project="PROYECTO-UNICO-REPORTES", q=request["code"].lower())[
+                "total"
+            ]
+            == 2
+        )
         assert response(db, user, "reports", project="DEMO-001", q=request["code"])["total"] == 0
     assert response(db, users["externo"], "reports", q=request["code"])["total"] == 0
     assert response(db, users["tecnico"], "reports", q=request["code"])["total"] == 0

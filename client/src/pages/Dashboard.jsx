@@ -1,7 +1,12 @@
-import { assayStatuses, requestStatuses } from "../services/statuses";
+import {
+  assayStatuses,
+  requestStatuses,
+  requestState,
+} from "../services/statuses";
 import useErrorNotice from "../hooks/useErrorNotice";
 import SearchSelect from "../components/SearchSelect";
 import RequesterFilters from "../components/RequesterFilters";
+import EconomicDashboard from "../components/EconomicDashboard";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { api, messageOf } from "../services/api";
@@ -141,7 +146,7 @@ export function RequestList({ mode = "requests" }) {
             <div className="form-grid" key={filterEpoch}>
               <Field label="Buscar solicitud">
                 <input
-                  placeholder="Código, título o proyecto"
+                  placeholder="Código de solicitud o proyecto"
                   value={params.get("q") || ""}
                   onChange={(e) => filter("q", e.target.value)}
                 />
@@ -187,7 +192,9 @@ export function RequestList({ mode = "requests" }) {
                   <Field label="Estado Solicitud">
                     <SearchSelect
                       multiple
-                      options={requestStatuses}
+                      options={requestStatuses.filter(
+                        (state) => state.id !== "DRAFT" || canRequest,
+                      )}
                       value={params.get("request_status") || ""}
                       onChange={(v) => filter("request_status", v)}
                     />
@@ -232,6 +239,11 @@ export function RequestList({ mode = "requests" }) {
                       {reception ? "Estado Recepción" : "Estado Ensayo"}
                     </th>
                     {!reception && <th>Estado Solicitud</th>}
+                    {!reception && (
+                      <th className="comments-column">
+                        Indicaciones generales
+                      </th>
+                    )}
                     <th>
                       {reception ? "Muestras por atender" : "Avance de ensayos"}
                     </th>
@@ -253,7 +265,7 @@ export function RequestList({ mode = "requests" }) {
                           )}
                         >
                           <b>{r.code}</b>
-                          <span>{r.title}</span>
+
                           <small>{r.project_code}</small>
                         </Link>
                       </td>
@@ -276,7 +288,14 @@ export function RequestList({ mode = "requests" }) {
                       </td>
                       {!reception && (
                         <td>
-                          <Badge state={r.request_status} />
+                          <Badge state={requestState(r)} />
+                        </td>
+                      )}
+                      {!reception && (
+                        <td className="comments-column">
+                          {r.notes && (
+                            <span className="comment-text">{r.notes}</span>
+                          )}
                         </td>
                       )}
                       <td>
@@ -432,6 +451,7 @@ export default function Dashboard() {
               </Link>
             ))}
           </div>
+          {data.economics && <EconomicDashboard data={data.economics} />}
           <div className="chart-grid">
             <section className="card form-card">
               <h2>Carga abierta por tipo de ensayo</h2>

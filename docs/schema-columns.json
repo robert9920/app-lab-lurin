@@ -105,6 +105,14 @@
   },
   {
     "table_name": "catalogo_ensayos",
+    "column_name": "precio",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "catalogo_ensayos",
     "column_name": "activo",
     "data_type": "boolean",
     "is_nullable": "NO",
@@ -371,7 +379,7 @@
     "table_name": "muestras",
     "column_name": "codigo_cliente",
     "data_type": "text",
-    "is_nullable": "NO",
+    "is_nullable": "YES",
     "column_default": null,
     "is_identity": "NO"
   },
@@ -387,8 +395,24 @@
     "table_name": "muestras",
     "column_name": "material",
     "data_type": "text",
-    "is_nullable": "NO",
+    "is_nullable": "YES",
     "column_default": "'Suelo'::text",
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "muestras",
+    "column_name": "coordenada_este",
+    "data_type": "numeric",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "muestras",
+    "column_name": "coordenada_norte",
+    "data_type": "numeric",
+    "is_nullable": "YES",
+    "column_default": null,
     "is_identity": "NO"
   },
   {
@@ -563,7 +587,7 @@
     "table_name": "solicitudes",
     "column_name": "proyecto_id",
     "data_type": "text",
-    "is_nullable": "NO",
+    "is_nullable": "YES",
     "column_default": null,
     "is_identity": "NO"
   },
@@ -609,33 +633,9 @@
   },
   {
     "table_name": "solicitudes",
-    "column_name": "coordenada_este",
-    "data_type": "numeric",
-    "is_nullable": "YES",
-    "column_default": null,
-    "is_identity": "NO"
-  },
-  {
-    "table_name": "solicitudes",
-    "column_name": "coordenada_norte",
-    "data_type": "numeric",
-    "is_nullable": "YES",
-    "column_default": null,
-    "is_identity": "NO"
-  },
-  {
-    "table_name": "solicitudes",
     "column_name": "codigo_ot",
     "data_type": "text",
     "is_nullable": "YES",
-    "column_default": null,
-    "is_identity": "NO"
-  },
-  {
-    "table_name": "solicitudes",
-    "column_name": "titulo",
-    "data_type": "text",
-    "is_nullable": "NO",
     "column_default": null,
     "is_identity": "NO"
   },
@@ -666,6 +666,14 @@
   {
     "table_name": "solicitudes",
     "column_name": "fecha_objetivo",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "column_default": null,
+    "is_identity": "NO"
+  },
+  {
+    "table_name": "solicitudes",
+    "column_name": "fecha_estimada_arribo",
     "data_type": "date",
     "is_nullable": "YES",
     "column_default": null,

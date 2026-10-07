@@ -4,6 +4,7 @@ import {
   assayStatuses,
   countLabel,
   requestStatuses,
+  requestState,
 } from "./statuses";
 
 describe("estados compartidos", () => {
@@ -38,9 +39,21 @@ describe("estados compartidos", () => {
     );
     expect(assayStatuses).toHaveLength(8);
     expect(requestStatuses.map((s) => s.name)).toEqual([
+      "Borrador",
       "Creado",
       "Cancelado",
       "Cerrado",
     ]);
+  });
+  it("presenta el borrador desde su etapa sin alterar el ciclo físico", () => {
+    expect(requestState({ status: "DRAFT", request_status: "CREATED" })).toBe(
+      "DRAFT",
+    );
+    expect(
+      requestState({ status: "APPROVED", request_status: "CREATED" }),
+    ).toBe("CREATED");
+    expect(
+      requestState({ status: "SUBMITTED", request_status: "CANCELLED" }),
+    ).toBe("CANCELLED");
   });
 });

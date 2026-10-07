@@ -76,7 +76,7 @@ def reports(db, req):
     u = session(db, req)
     where = (
         SCOPE
-        + " AND (:project='' OR r.proyecto_id::text=:project) AND (:request='' OR r.id::text=:request) AND (r.codigo ILIKE :q OR r.titulo ILIKE :q)"
+        + " AND (:project='' OR r.proyecto_id::text=:project) AND (:request='' OR r.id::text=:request) AND r.codigo ILIKE :q"
     )
     params = {
         **scope_params(u),

@@ -22,7 +22,7 @@ def response(db, user, route="requests", **params):
 
 def test_partial_counts_filters_and_virtual_rows(db, users):
     payload = declaration()
-    aid = one(db, "SELECT id FROM catalogo_ensayos WHERE codigo='HUM'")["id"]
+    aid = one(db, "SELECT id FROM catalogo_ensayos WHERE codigo='LC-001'")["id"]
     payload["samples"][0]["assay_ids"] = [aid]
     rid = w.create_request(db, users["cliente"], RequestCreate(**payload))["id"]
     w.action(db, users["cliente"], rid, Action(version=1, action="submit"))
@@ -118,7 +118,11 @@ def test_cancel_permissions_reason_concurrency_and_privacy(db, users):
         assert (
             invoke("request_detail", route={"rid": str(draft)}, headers=identity(db, user)).status_code == 404
         )
-    w.action(db, users["cliente"], draft, Action(version=1, action="cancel", reason="Borrador innecesario"))
+    with pytest.raises(AppError) as error:
+        w.action(
+            db, users["cliente"], draft, Action(version=1, action="cancel", reason="Borrador innecesario")
+        )
+    assert error.value.status == 409
     assert (
         invoke("request_detail", route={"rid": str(draft)}, headers=identity(db, users["admin"])).status_code
         == 404
@@ -225,11 +229,11 @@ def test_sql_pagination_all_records_and_technical_scope(db, users):
     execute(
         db,
         """WITH requests AS (
-        INSERT INTO solicitudes(proyecto_id,empresa_id,creado_por,titulo,estado_solicitud)
+        INSERT INTO solicitudes(proyecto_id,empresa_id,creado_por,observaciones,estado_solicitud)
         SELECT 'LOAD7',:org,:u,'Carga ficticia '||n,'SUBMITTED' FROM generate_series(1,125) n RETURNING id
     ), samples AS (
         INSERT INTO muestras(solicitud_id,codigo_cliente) SELECT id,'M1' FROM requests RETURNING id
-    ) INSERT INTO ensayos_muestra(muestra_id,ensayo_id) SELECT s.id,c.id FROM samples s CROSS JOIN catalogo_ensayos c WHERE c.codigo='HUM'""",
+    ) INSERT INTO ensayos_muestra(muestra_id,ensayo_id) SELECT s.id,c.id FROM samples s CROSS JOIN catalogo_ensayos c WHERE c.codigo='LC-001'""",
         org=users["cliente"]["organization_id"],
         u=users["cliente"]["id"],
     )

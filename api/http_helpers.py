@@ -49,16 +49,25 @@ def body(req, model):
             "district": "Distrito",
             "province": "Provincia",
             "department": "Departamento",
-            "easting": "Coordenada este",
-            "northing": "Coordenada norte",
-            "title": "Nombre de solicitud",
+            "easting": "Coordenadas Este",
+            "northing": "Coordenadas Norte",
+            "weight": "Peso (máximo un decimal)",
+            "received_weight": "Peso recibido (máximo un decimal)",
+            "price": "Precio USD (máximo dos decimales)",
             "samples": "Muestras y ensayos",
             "codigo_ot": "OT",
         }
         messages = []
         for issue in error.errors(include_input=False, include_context=False, include_url=False):
-            key = issue["loc"][0] if issue["loc"] else None
+            key = issue["loc"][-1] if issue["loc"] else None
             label = labels.get(key, "Formulario")
+            if (
+                issue["loc"]
+                and issue["loc"][0] == "samples"
+                and len(issue["loc"]) > 1
+                and isinstance(issue["loc"][1], int)
+            ):
+                label = f"Muestra {issue['loc'][1] + 1} · {label}"
             if issue["type"] == "extra_forbidden":
                 message = "Formulario: contiene campos no permitidos; recarga la página."
             else:

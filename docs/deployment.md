@@ -1,19 +1,32 @@
 # Publicación en Azure desde VS Code
 
-## Actualización de una aplicación ya instalada en esquema 6 → 7
+## Actualización actual: esquema 8 → 9 sin eliminar datos
 
-No crear recursos ni cambiar variables Azure. Conservar origen, proxy, HTTPS, credenciales, identidad Blob, conexiones y comandos de inicio existentes. Producción continúa en **lab_lc** y local en **lab_lc_v3**.
+Conservar todos los recursos y variables vigentes. Azure sigue en **lab_lc** y local en **lab_lc_v3**. No hay nuevas variables ni servicios.
 
-1. Respaldar PostgreSQL y los PDF/versiones referenciados. Conservar paquetes anteriores y ajustes privados. Detener el backend anterior y restringir temporalmente el acceso al portal durante SQL y publicación coordinada.
-2. En pgAdmin conectado a la base correcta, comprobar `SELECT current_database(); SELECT max(version) FROM migraciones_esquema;`.
-3. **Si la versión es 6, ejecutar SOLO la sección «NUEVA SECCIÓN — Actualización de esquema 6 a 7: estados de solicitud y resumen de ensayos»** de `sql/05_actualizacion_solicitudes.sql`, desde su BEGIN hasta su COMMIT. No ejecutar los bloques anteriores ni 01. Si es 5: ejecutar 5→6 y 6→7; si es 4: 4→5, 5→6 y 6→7; si es 3: todo SQL05. Si es 7: no repetir.
-4. Confirmar versión7 y `SELECT estado_general,count(*) FROM solicitudes GROUP BY estado_general;`. La nueva columna admite CREATED/CANCELLED/CLOSED. Preserva etapa interna y cierres históricos; convierte rechazos globales anteriores en cancelaciones y cancela sus ensayos abiertos no rechazados con auditoría. Conserva completados, decisiones, fechas, PDFs y claves Blob.
-5. Publicar **api** y **client** mediante VS Code con las exclusiones actuales. Compilar client según la ruta ya configurada; dist sola no incluye el proxy. Reiniciar ambos servicios. No mezclar backend v7 con un frontend anterior durante la transición.
-6. Como autor, enviar dos muestras con un ensayo en una y ninguno en otra. Ver conteos Por aprobar y muestra pendiente; aprobar uno, iniciar y comprobar Pendiente Ejecución/En Ejecución. Revisar rechazo y reenvío. Comprobar mismos filtros en Work, filas informativas, privacidad, borradores, técnicos y descarga autorizada.
-7. Probar cancelación con motivo como autor/jefatura: consultas e informes permanecen, escrituras bloqueadas, carga y recepción excluidas. Verificar que no se pueda cancelar cerrado ni cerrar sin al menos un completado o con trabajo/revisión/muestras pendientes o sin PDF.
-8. Reversión: restaurar conjuntamente respaldo de base y paquetes anteriores. No eliminar Blob ni intentar quitar columnas en una base operativa para volver atrás. Las pruebas locales no certifican Azure desplegado.
+1. Respaldar PostgreSQL y conservar los paquetes anteriores. Detener el backend y evitar escrituras durante la actualización/publicación.
+2. Con el propietario en pgAdmin comprobar `SELECT current_database(); SELECT max(version) FROM migraciones_esquema;`. Si la versión es **8**, ejecutar **solo sql/07_actualizacion_borradores.sql**, desde BEGIN hasta COMMIT. Comprobar versión9. Si falla, ejecutar ROLLBACK y corregir antes de reintentar.
+3. Publicar desde VS Code **api** y **client**, con sus exclusiones/build/comandos de inicio existentes. No ejecutar SQL01, demo ni SQL06 sobre la base actual: **SQL06 reinicia datos y no pertenece a esta actualización**.
+4. Probar borrador incompleto desde cada paso, recuperación, bloqueo de cancelación, envío tras completar campos, privacidad, búsqueda sin tildes y motivos de ensayo visibles al cliente.
 
-Para instalación **nueva y vacía**: SQL00 crea lab_lc en Azure o lab_lc_v3 local; SQL01 instala esquema7, SQL02 catálogo, SQL04 permisos runtime opcionales y administrador inicial. No ejecutar05 tras01; SQL03 solo demostración. El número de esquema es independiente del nombre. En local aplicar el mismo bloque6→7 conservando local.settings.json y las dos ventanas Anaconda.
+SQL07 conserva todos los registros, correlativos, documentos y triggers. Solo permite NULL para proyecto aún no seleccionado y código/material incompletos de borradores. Para revertir después de guardar datos parciales, restaurar el respaldo y paquetes compatibles de forma coordinada; el backend antiguo no admite estos borradores. No borrar PDF por esta actualización.
+
+Instalación nueva: SQL00 de producción crea lab_lc; conectar a ella y ejecutar SQL01 (esquema9), SQL02, permisos opcionales SQL04 y bootstrap. No aplicar SQL05/06/07 después de instalar9 desde cero. Mantener las instrucciones de red, HTTPS, proxy, PostgreSQL y Blob de los apartados siguientes.
+
+## Antecedente: esquema 7 → 8 con reinicio operativo
+
+No cambiar recursos, variables ni comandos de inicio de Azure. Conservar configuración de origen/proxy, TLS, conexiones e identidad Blob. Azure usa **lab_lc** y local **lab_lc_v3**. Esta actualización elimina los datos operativos según autorización; no es una migración que los conserve.
+
+1. Respaldar base y PDF; conservar paquetes/ajustes privados anteriores. Exportar `SELECT clave_archivo FROM informes;` antes de borrar metadatos. Detener Functions anterior y restringir el portal durante SQL y publicación.
+2. Con el propietario en pgAdmin verificar `SELECT current_database(); SELECT max(version) FROM migraciones_esquema;`. Desde 3–6 aplicar primero los bloques pendientes de SQL05 hasta 7. Desde 7 ejecutar **SQL06 completo** (`sql/06_actualizacion_catalogo_muestras.sql`), una vez y en su transacción. No repetir SQL01/05/06 sobre versión8.
+3. SQL06 borra solicitudes, muestras, ensayos, informes (metadatos), historial ligado a solicitudes y catálogo. Conserva usuarios, empresas, contraseñas, sesiones, límites, historial administrativo y correlativos. Reinstala 58 ensayos oficiales/precios USD, añade fecha estimada de arribo, mueve coordenadas a muestras y retira titulo. Los triggers de inmutabilidad quedan activos al finalizar. Si falla: ROLLBACK, corregir y reintentar desde versión7; no saltar comprobaciones.
+4. Comprobar versión8, `SELECT count(*) FROM catalogo_ensayos;` =58 y que solicitudes/muestras/ensayos/informes estén vacíos. Verificar login existente, empresas/usuarios y correlativos conservados. `manage.py migrate` nunca ejecuta este reinicio; no es un paso posterior obligatorio.
+5. **Backend:** abrir api como carpeta en VS Code y publicar en la Function App existente, con compilación remota y .funcignore vigente. Incluye services/economics.py; excluye pruebas, entornos, temporales y settings privados. **Frontend:** abrir client y publicar la carpeta completa según .vscode/settings.json; compilación remota genera dist. dist sola no incluye servidor/proxy. Mantener el comando PM2, API_TARGET y FUNCTION_PROXY_KEY actuales. Reiniciar ambos; no servir backend/frontend antiguos con esquema8.
+6. Comprobar 58 ensayos activos, edición por ID/precio, filtros administrativos, ausencia de título, fechas opcionales, coordenadas por muestra, profundidad 5.00, peso máximo1 decimal, recepción e informes. Verificar dashboard económico solo ADMIN/MANAGER y recalculado por precio vigente. Revisar permisos/borradores/técnicos y descargas privadas.
+7. Los PDF físicos anteriores permanecen privados. Después de comprobar el respaldo, limpiar por separado solo las claves exportadas que ya no estén referenciadas. No borrar todo el contenedor/carpeta; Blob puede retener versiones según sus políticas. El SQL no requiere permisos de borrado en Storage.
+8. Reversión: restaurar juntos respaldo PostgreSQL y paquetes anteriores; conservar PDF necesarios. Las pruebas locales no certifican recursos Azure desplegados.
+
+**Base nueva y vacía:** SQL00 correspondiente crea lab_lc (Azure) o lab_lc_v3 (local); SQL01 instala directamente8; SQL02 catálogo58; SQL04 permisos runtime opcionales; administrador inicial con manage.py bootstrap. SQL03 solo datos ficticios. No ejecutar05 ni06 después de01. Mantener las dos ventanas Anaconda y configuración privada descritas en README.
 
 ## 0. Antecedente: actualización de esquema 3 a 4
 

@@ -1,6 +1,27 @@
 import { describe, it, expect } from "vitest";
-import { adminPayload } from "./admin";
+import { adminPayload, filterAdminRows } from "./admin";
 describe("Administración sin membresías", () => {
+  it("busca nombres sin tildes ni diferencias de mayúsculas en las tres vistas", () => {
+    for (const [type, name, query] of [
+      ["users", "Lucía Torres", "LUCIA"],
+      ["organizations", "Compañía Perú", "compania peru"],
+      ["catalog", "Análisis Granulométrico", "analisis granulo"],
+    ]) {
+      const row = {
+        name,
+        active: true,
+        roles: ["TECH"],
+        organization_id: "a",
+        category: "Suelos",
+      };
+      expect(
+        filterAdminRows([row], { name: query, active: "true" }, type),
+      ).toEqual([row]);
+      expect(
+        filterAdminRows([row], { name: query, active: "false" }, type),
+      ).toEqual([]);
+    }
+  });
   it("envía solo campos permitidos y conserva empresa y teléfono", () => {
     const p = adminPayload("users", {
       name: "Ana",

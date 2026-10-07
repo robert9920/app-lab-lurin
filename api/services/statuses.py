@@ -14,7 +14,7 @@ ASSAY_STATUSES = (
     "CANCELLED",
     "OBSERVED",
 )
-REQUEST_STATUSES = {"CREATED", "CANCELLED", "CLOSED"}
+REQUEST_STATUSES = {"DRAFT", "CREATED", "CANCELLED", "CLOSED"}
 
 
 def assay_case(alias="a"):
@@ -71,7 +71,9 @@ def lifecycle_filter(req, where, params):
     values = csv_values(req, "request_status", REQUEST_STATUSES)
     if values:
         params["request_status_values"] = values
-        where.append("r.estado_general=ANY(:request_status_values)")
+        where.append(
+            "(CASE WHEN r.estado_solicitud='DRAFT' THEN 'DRAFT' ELSE r.estado_general END)=ANY(:request_status_values)"
+        )
 
 
 def assay_filter(req, where, params, *, work=False):

@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, ValidationError, field_validator, model_validator
 
 
 class Model(BaseModel):
@@ -33,7 +33,9 @@ class Sample(Model):
     depth_from: Decimal | None = Field(default=None, ge=0)
     depth_to: Decimal | None = Field(default=None, ge=0)
     quantity: int | None = Field(default=None, gt=0, strict=True)
-    weight: Decimal | None = Field(default=None, gt=0, allow_inf_nan=False)
+    weight: Decimal | None = Field(default=None, gt=0, allow_inf_nan=False, decimal_places=1)
+    easting: Decimal | None = Field(default=None, allow_inf_nan=False)
+    northing: Decimal | None = Field(default=None, allow_inf_nan=False)
     notes: str = Field(default="", max_length=3000)
     assay_ids: list[UUID] = Field(default_factory=list, max_length=40)
 
@@ -48,19 +50,69 @@ class Sample(Model):
 
 class RequestCreate(Model):
     project_id: str | None = Field(default=None, min_length=1, max_length=100)
-    title: str = Field(min_length=3, max_length=180)
     notes: str = Field(default="", max_length=5000)
     target_date: date | None = None
+    estimated_arrival_date: date | None = None
     district: str = Field(min_length=1, max_length=100)
     province: str = Field(min_length=1, max_length=100)
     department: str = Field(min_length=1, max_length=100)
-    easting: Decimal | None = Field(default=None, allow_inf_nan=False)
-    northing: Decimal | None = Field(default=None, allow_inf_nan=False)
     samples: list[Sample] = Field(min_length=1, max_length=200)
 
 
 class RequestEdit(RequestCreate, Version):
     pass
+
+
+class DraftSample(Sample):
+    client_code: str | None = Field(default=None, max_length=100)
+    material: str | None = Field(default=None, max_length=100)
+
+    @field_validator("client_code", "material", mode="before")
+    @classmethod
+    def missing_text(cls, value):
+        return None if isinstance(value, str) and not value.strip() else value
+
+
+class DraftCreate(RequestCreate):
+    district: str | None = Field(default=None, min_length=1, max_length=100)
+    province: str | None = Field(default=None, min_length=1, max_length=100)
+    department: str | None = Field(default=None, min_length=1, max_length=100)
+    samples: list[DraftSample] = Field(default_factory=list, max_length=200)
+
+    @field_validator("project_id", "district", "province", "department", mode="before")
+    @classmethod
+    def missing_text(cls, value):
+        return None if isinstance(value, str) and not value.strip() else value
+
+
+class DraftEdit(DraftCreate, Version):
+    pass
+
+
+def complete_request(values):
+    """Recheck required declarations before sending or editing a sent request."""
+    from errors import AppError
+
+    try:
+        return RequestCreate.model_validate(values)
+    except ValidationError as error:
+        labels = {
+            "district": "Distrito",
+            "province": "Provincia",
+            "department": "Departamento",
+            "samples": "al menos una muestra",
+            "client_code": "Muestra",
+            "material": "Tipo de muestra",
+        }
+        missing = []
+        for issue in error.errors(include_input=False, include_context=False, include_url=False):
+            location = issue["loc"]
+            label = labels.get(location[-1] if location else None, "datos de la solicitud")
+            if len(location) > 1 and location[0] == "samples" and isinstance(location[1], int):
+                label = f"Muestra {location[1] + 1}: {label}"
+            if label not in missing:
+                missing.append(label)
+        raise AppError(400, "Completa o revisa antes de enviar: " + "; ".join(missing) + ".") from None
 
 
 class SampleAssays(Model):
@@ -125,7 +177,7 @@ class ReceivedSample(Model):
     codigo_laboratorio: str = Field(min_length=1, max_length=60)
     condition: Literal["OK", "OBSERVED", "DAMAGED", "INSUFFICIENT"] = "OK"
     received_quantity: int | None = Field(default=None, gt=0, strict=True)
-    received_weight: Decimal | None = Field(default=None, gt=0, allow_inf_nan=False)
+    received_weight: Decimal | None = Field(default=None, gt=0, allow_inf_nan=False, decimal_places=1)
     reception_notes: str = Field(default="", max_length=3000)
 
     @field_validator("codigo_recepcion", "codigo_laboratorio")
@@ -232,4 +284,5 @@ class Catalog(Model):
     name: str = Field(min_length=3, max_length=200)
     method: str = Field(default="", max_length=200)
     category: str = Field(default="Geotecnia", max_length=100)
+    price: Decimal = Field(gt=0, allow_inf_nan=False, decimal_places=2)
     active: bool = True

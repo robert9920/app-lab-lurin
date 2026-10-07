@@ -2671,6 +2671,71 @@ dd {
   gap: 8px;
   margin-top: 8px;
 }
+
+/* Comentarios declarados y motivos operativos; solo estas zonas conservan saltos de línea. */
+.comment-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.comments-column {
+  min-width: 180px;
+  max-width: 300px;
+}
+.summary-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid #eadfe4;
+}
+.general-comment {
+  flex: 1;
+  min-width: 0;
+}
+.general-comment p {
+  margin: 8px 0 0;
+}
+.summary-footer > .form-actions {
+  align-self: flex-end;
+  align-items: flex-end;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  max-width: 100%;
+  margin: 0 0 0 auto;
+  padding: 0;
+  border: 0;
+}
+.summary-footer > .form-actions > .field {
+  flex: 0 1 200px;
+  width: 200px;
+  min-width: 0;
+  max-width: 100%;
+  margin-bottom: 0;
+}
+.summary-footer > .form-actions > .field > input,
+.summary-footer > .form-actions > .btn {
+  height: 46px;
+  min-height: 46px;
+}
+.summary-footer:has(> .form-actions:empty):not(:has(> .general-comment)) {
+  display: none;
+}
+.assay-state-reason {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  max-width: 320px;
+}
+@media (max-width: 900px) {
+  .summary-footer {
+    flex-direction: column;
+  }
+  .summary-footer > .form-actions {
+    width: 100%;
+  }
+}
 .assay-review-state > .badge-REJECTED {
   justify-self: start;
   width: fit-content;
@@ -2694,7 +2759,147 @@ dd {
 }
 
 /* Estados derivados: la decisión y la ejecución comparten una única etiqueta. */
-.badge-PENDING_REVIEW, .badge-PENDING_EXECUTION { background: #fff4d8; color: #8a5708; }
-.badge-CREATED { background: #eaf0ff; color: #315ba6; }
-.assay-status-column { min-width: 230px; }
-.assay-counts .badge { white-space: nowrap; flex-shrink: 0; }
+.badge-PENDING_REVIEW,
+.badge-PENDING_EXECUTION {
+  background: #fff4d8;
+  color: #8a5708;
+}
+.badge-CREATED {
+  background: #eaf0ff;
+  color: #315ba6;
+}
+.assay-status-column {
+  min-width: 230px;
+}
+.assay-counts .badge {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Esquema 8: selección compacta de ensayos y valoración económica. */
+.sample-assays-column {
+  min-width: 300px;
+  max-width: 460px;
+}
+.sample-matrix .sample-assays-column {
+  width: 360px;
+  min-width: 360px;
+}
+.assay-selector-table th:first-child,
+.assay-selector-table td:first-child {
+  width: 48px;
+  min-width: 48px;
+}
+.assay-selector-table td:not(:first-child) {
+  text-align: left;
+}
+.assay-selector-table th:last-child {
+  max-width: none;
+}
+.sample-assays-column > .btn {
+  margin-top: 10px;
+}
+.sample-bulk-actions {
+  margin: 12px 0;
+}
+.selected-assays {
+  display: grid;
+  gap: 8px;
+}
+.selected-assay {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  background: #fff4f5;
+  border: 1px solid #efd4d9;
+  border-radius: 8px;
+}
+.selected-assay > div {
+  min-width: 0;
+  flex: 1;
+}
+.selected-assay b {
+  overflow-wrap: anywhere;
+}
+.selected-assay .icon-btn {
+  flex-shrink: 0;
+}
+.modal:has(.assay-picker) {
+  width: min(850px, calc(100vw - 32px));
+}
+.assay-picker-list {
+  max-height: 48vh;
+  overflow-y: auto;
+  margin-top: 18px;
+  padding-right: 8px;
+}
+.assay-picker-list h3 {
+  position: sticky;
+  top: 0;
+  background: #fff1f3;
+  color: #8d2436;
+  margin: 12px 0 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  z-index: 1;
+}
+.assay-option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border-bottom: 1px solid #f0e3e6;
+  cursor: pointer;
+}
+.assay-option:hover {
+  background: #fff8f9;
+}
+.assay-option input {
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+}
+.assay-option b {
+  overflow-wrap: anywhere;
+}
+.assay-option small {
+  margin-top: 5px;
+}
+.money-value {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.economic-dashboard {
+  margin: 28px 0;
+}
+.economic-dashboard > h2 {
+  margin-bottom: 8px;
+}
+.economic-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.economic-stats .stat-card strong {
+  font-size: var(--text-title);
+}
+.economic-dashboard .chart-grid {
+  margin-top: 20px;
+}
+.income-chart-scroll {
+  overflow-x: auto;
+}
+.income-months {
+  min-width: 760px;
+}
+.income-months strong {
+  font-size: var(--text-small);
+  white-space: nowrap;
+}
+@media (max-width: 700px) {
+  .economic-stats {
+    grid-template-columns: 1fr;
+  }
+  .sample-assays-column {
+    min-width: 240px;
+  }
+}

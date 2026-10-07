@@ -172,8 +172,24 @@ def admin_catalog(db, req):
     u, p = admin(db, req), body(req, Catalog)
     result = one(
         db,
-        "INSERT INTO catalogo_ensayos(codigo,nombre,metodo,categoria,activo) VALUES(:code,:name,:method,:category,:active)\n        ON CONFLICT(codigo) DO UPDATE SET nombre=excluded.nombre,metodo=excluded.metodo,categoria=excluded.categoria,activo=excluded.activo RETURNING id",
+        "INSERT INTO catalogo_ensayos(codigo,nombre,metodo,categoria,precio,activo) VALUES(:code,:name,:method,:category,:price,:active) RETURNING id",
         **p.model_dump(),
     )
+    audit(db, u, "CATALOG_SAVED", detail={"id": result["id"]})
+    return result
+
+
+@bp.route(route="management/catalog/{id}", methods=["PUT"])
+@endpoint
+def edit_catalog(db, req):
+    u, p = admin(db, req), body(req, Catalog)
+    result = one(
+        db,
+        "UPDATE catalogo_ensayos SET codigo=:code,nombre=:name,metodo=:method,categoria=:category,precio=:price,activo=:active WHERE id=:id RETURNING id",
+        id=uid(req.route_params["id"]),
+        **p.model_dump(),
+    )
+    if not result:
+        raise AppError(404, "Ensayo no encontrado.")
     audit(db, u, "CATALOG_SAVED", detail={"id": result["id"]})
     return result

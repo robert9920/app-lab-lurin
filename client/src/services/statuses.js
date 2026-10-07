@@ -10,10 +10,15 @@ export const assayStatuses = [
 ].map(([id, name]) => ({ id, name }));
 
 export const requestStatuses = [
+  ["DRAFT", "Borrador"],
   ["CREATED", "Creado"],
   ["CANCELLED", "Cancelado"],
   ["CLOSED", "Cerrado"],
 ].map(([id, name]) => ({ id, name }));
+
+export function requestState(request) {
+  return request.status === "DRAFT" ? "DRAFT" : request.request_status;
+}
 
 export function assayStatus(task) {
   if (task.row_kind === "sample_without_assays") return "WAITING_ASSAYS";

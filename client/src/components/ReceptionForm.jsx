@@ -35,6 +35,21 @@ export default function ReceptionForm({ request, onDone }) {
   async function submit(e) {
     e.preventDefault();
     setError("");
+    for (const s of samples.filter((s) => selected.includes(s.sample_id))) {
+      const weight = Number(s.received_weight);
+      if (
+        s.received_weight !== "" &&
+        s.received_weight != null &&
+        (!Number.isFinite(weight) ||
+          weight <= 0 ||
+          Math.abs(weight * 10 - Math.round(weight * 10)) > 1e-8)
+      ) {
+        setError(
+          "Peso recibido: utiliza un valor positivo con máximo un decimal.",
+        );
+        return;
+      }
+    }
     setBusy(true);
     try {
       const { data } = await api.post(
@@ -51,7 +66,7 @@ export default function ReceptionForm({ request, onDone }) {
               received_quantity:
                 s.received_quantity === "" ? null : Number(s.received_quantity),
               received_weight:
-                s.received_weight === "" ? null : Number(s.received_weight),
+                s.received_weight === "" ? null : String(s.received_weight),
             })),
         },
       );
@@ -129,7 +144,7 @@ export default function ReceptionForm({ request, onDone }) {
               <Badge state={original.condition} />
             </label>
             <p className="muted">
-              Declarado: {original.quantity ?? "Sin dato"} sacos ·{" "}
+              Declarado: {original.quantity ?? "Sin dato"} recipientes ·{" "}
               {original.weight ?? "Sin dato"} kg
             </p>
             {original.received_at && (
@@ -164,7 +179,7 @@ export default function ReceptionForm({ request, onDone }) {
                     placeholder="M-26-024-001"
                   />
                 </Field>
-                <Field label="Sacos recibidos (opcional)">
+                <Field label="Recipientes recibidos (opcional)">
                   <NumericInput
                     integer
                     increment={1}
@@ -182,7 +197,7 @@ export default function ReceptionForm({ request, onDone }) {
                   <NumericInput
                     increment={0.1}
                     type="number"
-                    min="0.001"
+                    min="0.1"
                     step="any"
                     value={s.received_weight}
                     onChange={(e) =>

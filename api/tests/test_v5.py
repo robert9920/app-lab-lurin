@@ -18,7 +18,7 @@ from validation import Action, AssaysEdit, Reception, RequestCreate, TaskUpdate,
 
 def test_partial_approval_later_assays_and_preserved_running_work(db, users):
     client, manager, tech = users["cliente"], users["jefe"], users["tecnico"]
-    aid = one(db, "SELECT id FROM catalogo_ensayos WHERE codigo='HUM'")["id"]
+    aid = one(db, "SELECT id FROM catalogo_ensayos WHERE codigo='LC-001'")["id"]
     data = declaration()
     data["samples"][0]["assay_ids"] = [aid]
     rid = w.create_request(db, client, RequestCreate(**data))["id"]
@@ -109,7 +109,7 @@ def test_coordinate_formats_optional_and_decimal(db, users, east, north):
     rid = w.create_request(db, users["cliente"], RequestCreate(**declaration(easting=east, northing=north)))[
         "id"
     ]
-    assert w.detail(db, users["cliente"], rid)["easting"] == (
+    assert w.detail(db, users["cliente"], rid)["samples"][0]["easting"] == (
         Decimal(str(east)) if east is not None else None
     )
 
@@ -140,13 +140,13 @@ def test_filters_dates_multiple_states_and_authorized_options(db, users):
         "2026-10-03T04:59:59Z",
         "2026-10-03T05:00:00Z",
     ):
-        rid = w.create_request(db, client, RequestCreate(**declaration(title="Filtro v5 de fechas")))["id"]
+        rid = w.create_request(db, client, RequestCreate(**declaration()))["id"]
         w.action(db, client, rid, Action(version=1, action="submit"))
         execute(db, "UPDATE solicitudes SET creado_en=:at WHERE id=:id", at=at, id=rid)
         ids.append(str(rid))
     h = identity(db, users["jefe"])
     params = {
-        "q": "Filtro v5",
+        "project": "DEMO-001",
         "created_from": "2026-10-02",
         "created_to": "2026-10-02",
         "status": "WAITING_ASSAYS,APPROVED",

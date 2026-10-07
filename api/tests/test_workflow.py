@@ -144,7 +144,7 @@ def test_reception_correction_reason_and_history(db, users):
 
 def test_full_service_and_project_isolation(db, users):
     project = "DEMO-001"
-    assay = one(db, "SELECT id FROM catalogo_ensayos WHERE codigo='HUM'")["id"]
+    assay = one(db, "SELECT id FROM catalogo_ensayos WHERE codigo='LC-001'")["id"]
     rid = w.create_request(
         db,
         users["cliente"],
@@ -153,7 +153,6 @@ def test_full_service_and_project_isolation(db, users):
             province="Lima",
             department="Lima",
             project_id=project,
-            title="Recorrido completo",
             samples=[
                 {
                     "material": "Suelo",
@@ -250,15 +249,15 @@ def test_pdf_immediate_versions_and_access(db, users):
 def test_dashboard_over_100_requests_and_sql_reconciliation(db, users):
     execute(
         db,
-        "INSERT INTO solicitudes(proyecto_id,empresa_id,creado_por,titulo,estado_solicitud)\n        SELECT 'DEMO-001','10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000004','Carga masiva '||n,'APPROVED'\n        FROM generate_series(1,130) n",
+        "INSERT INTO solicitudes(proyecto_id,empresa_id,creado_por,observaciones,estado_solicitud)\n        SELECT 'DEMO-001','10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000004','Carga masiva '||n,'APPROVED'\n        FROM generate_series(1,130) n",
     )
     execute(
         db,
-        "INSERT INTO muestras(solicitud_id,codigo_cliente) SELECT id,'BATCH' FROM solicitudes WHERE titulo LIKE 'Carga masiva %'",
+        "INSERT INTO muestras(solicitud_id,codigo_cliente) SELECT id,'BATCH' FROM solicitudes WHERE observaciones LIKE 'Carga masiva %'",
     )
     execute(
         db,
-        "INSERT INTO ensayos_muestra(muestra_id,ensayo_id,estado_revision) SELECT s.id,c.id,'APPROVED' FROM muestras s CROSS JOIN catalogo_ensayos c\n        WHERE s.codigo_cliente='BATCH' AND c.codigo='HUM'",
+        "INSERT INTO ensayos_muestra(muestra_id,ensayo_id,estado_revision) SELECT s.id,c.id,'APPROVED' FROM muestras s CROSS JOIN catalogo_ensayos c\n        WHERE s.codigo_cliente='BATCH' AND c.codigo='LC-001'",
     )
     data = json.loads(invoke("dashboard", headers=identity(db, users["admin"])).get_body())
     expected = one(

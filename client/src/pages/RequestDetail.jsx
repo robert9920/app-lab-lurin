@@ -126,13 +126,14 @@ export default function RequestDetail() {
       {r ? (
         <>
           <PageHead
-            eyebrow={r.code + " · " + r.project.code}
-            title={r.title}
-            description={
-              r.project.organization_name +
-              " · " +
-              [r.district, r.province, r.department].filter(Boolean).join(", ")
-            }
+            eyebrow={[r.code, r.project.code].filter(Boolean).join(" · ")}
+            title={r.code}
+            description={[
+              r.project.organization_name,
+              [r.district, r.province, r.department].filter(Boolean).join(", "),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           >
             <RequestBadges request={r} />
           </PageHead>
@@ -179,16 +180,10 @@ export default function RequestDetail() {
                     </Link>
                   )}
                 </div>
-                {r.notes && <p>{r.notes}</p>}
                 <p className="muted">
-                  Fecha objetivo: {fmtDate(r.target_date)} · OT:{" "}
+                  Arribo estimado: {fmtDate(r.estimated_arrival_date)} · Fecha
+                  objetivo entrega resultados: {fmtDate(r.target_date)} · OT:{" "}
                   {r.codigo_ot || "Sin OT"} · Versión {r.version}
-                  {(r.easting != null || r.northing != null) && (
-                    <span className="block">
-                      Este: {r.easting ?? "Sin dato"} · Norte:{" "}
-                      {r.northing ?? "Sin dato"}
-                    </span>
-                  )}
                 </p>
                 <div className="table-scroll">
                   <table>
@@ -198,21 +193,25 @@ export default function RequestDetail() {
                         <th>Material / cantidad</th>
                         <th>Ensayos solicitados</th>
                         <th>Recepción</th>
+                        <th className="comments-column">Comentarios</th>
                       </tr>
                     </thead>
                     <tbody>
+                      {!r.samples.length && (
+                        <tr>
+                          <td colSpan={5}>
+                            Todavía no has registrado muestras.
+                          </td>
+                        </tr>
+                      )}
                       {r.samples.map((s) => (
                         <tr key={s.id}>
                           <td>
-                            <b>{s.client_code}</b>
-                            <small className="block">
-                              {[s.borehole, s.notes]
-                                .filter(Boolean)
-                                .join(" · ")}
-                            </small>
+                            <b>{s.client_code || "Muestra sin definir"}</b>
+                            <small className="block">{s.borehole}</small>
                           </td>
                           <td>
-                            {s.material}
+                            {s.material || "Tipo sin definir"}
                             {(s.depth_from != null || s.depth_to != null) && (
                               <small className="block">
                                 Prof.:{" "}
@@ -226,8 +225,14 @@ export default function RequestDetail() {
                                 m
                               </small>
                             )}
+                            {(s.easting != null || s.northing != null) && (
+                              <small className="block">
+                                Coordenadas Este: {s.easting ?? "Sin dato"} ·
+                                Norte: {s.northing ?? "Sin dato"}
+                              </small>
+                            )}
                             <small className="block">
-                              Sacos: {s.quantity ?? "Sin dato"} · Peso:{" "}
+                              Recipientes: {s.quantity ?? "Sin dato"} · Peso:{" "}
                               {s.weight ?? "Sin dato"} kg
                             </small>
                           </td>
@@ -240,70 +245,83 @@ export default function RequestDetail() {
                           <td>
                             <Badge state={s.condition} />
                           </td>
+                          <td className="comments-column">
+                            {s.notes && (
+                              <span className="comment-text">{s.notes}</span>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-                <div className="form-actions">
-                  {canRequest &&
-                    r.request_status === "CREATED" &&
-                    ["DRAFT", "OBSERVED"].includes(r.status) && (
-                      <Button
-                        variant="primary"
-                        busy={busy}
-                        onClick={() => act("submit")}
-                      >
-                        Enviar al laboratorio
-                      </Button>
-                    )}
-                  {r.can_cancel && (
-                    <>
-                      <Field label="Motivo de cancelación">
-                        <input
-                          value={reason}
-                          onChange={(e) => setReason(e.target.value)}
-                        />
-                      </Field>
-                      {manager && r.status === "SUBMITTED" && (
+                <div className="summary-footer">
+                  {r.notes && (
+                    <div className="general-comment">
+                      <strong>Indicaciones generales</strong>
+                      <p className="comment-text">{r.notes}</p>
+                    </div>
+                  )}
+                  <div className="form-actions">
+                    {canRequest &&
+                      r.request_status === "CREATED" &&
+                      ["DRAFT", "OBSERVED"].includes(r.status) && (
+                        <Button
+                          variant="primary"
+                          busy={busy}
+                          onClick={() => act("submit")}
+                        >
+                          Enviar al laboratorio
+                        </Button>
+                      )}
+                    {r.can_cancel && (
+                      <>
+                        <Field label="Motivo de cancelación">
+                          <input
+                            value={reason}
+                            onChange={(e) => setReason(e.target.value)}
+                          />
+                        </Field>
+                        {manager && r.status === "SUBMITTED" && (
+                          <Button
+                            busy={busy}
+                            disabled={!reason.trim()}
+                            onClick={() => act("observe")}
+                          >
+                            Observar
+                          </Button>
+                        )}
                         <Button
                           busy={busy}
                           disabled={!reason.trim()}
-                          onClick={() => act("observe")}
+                          onClick={() => act("cancel")}
                         >
-                          Observar
+                          Cancelar solicitud
+                        </Button>
+                      </>
+                    )}
+                    {manager &&
+                      r.request_status === "CREATED" &&
+                      ["WAITING_ASSAYS", "SUBMITTED", "APPROVED"].includes(
+                        r.status,
+                      ) &&
+                      r.unapproved_count > 0 && (
+                        <Button
+                          busy={busy}
+                          variant="primary"
+                          onClick={() => setReviewOpen(true)}
+                        >
+                          Revisar ensayos ({r.unapproved_count})
                         </Button>
                       )}
-                      <Button
-                        busy={busy}
-                        disabled={!reason.trim()}
-                        onClick={() => act("cancel")}
-                      >
-                        Cancelar solicitud
-                      </Button>
-                    </>
-                  )}
-                  {manager &&
-                    r.request_status === "CREATED" &&
-                    ["WAITING_ASSAYS", "SUBMITTED", "APPROVED"].includes(
-                      r.status,
-                    ) &&
-                    r.unapproved_count > 0 && (
-                      <Button
-                        busy={busy}
-                        variant="primary"
-                        onClick={() => setReviewOpen(true)}
-                      >
-                        Revisar ensayos ({r.unapproved_count})
-                      </Button>
-                    )}
-                  {manager &&
-                    r.request_status === "CREATED" &&
-                    r.status === "APPROVED" && (
-                      <Button busy={busy} onClick={() => act("close")}>
-                        Cerrar servicio
-                      </Button>
-                    )}
+                    {manager &&
+                      r.request_status === "CREATED" &&
+                      r.status === "APPROVED" && (
+                        <Button busy={busy} onClick={() => act("close")}>
+                          Cerrar servicio
+                        </Button>
+                      )}
+                  </div>
                 </div>
               </>
             )}

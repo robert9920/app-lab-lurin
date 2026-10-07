@@ -86,7 +86,7 @@ export default function WorkPage() {
               />
             </div>
             <div className="form-grid" key={filterEpoch}>
-              <Field label="Solicitud (código o título)">
+              <Field label="Solicitud (código)">
                 <input
                   value={params.get("request_q") || ""}
                   onChange={(e) => filter("request_q", e.target.value)}
